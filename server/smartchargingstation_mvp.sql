@@ -451,6 +451,18 @@ ALTER TABLE `users`
   ADD CONSTRAINT `users_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`);
 COMMIT;
 
+-- --------------------------------------------------------
+--
+-- Sample data for testing
+--
+
+-- Sample promotions data
+INSERT INTO `promotions` (`code`, `title`, `discount_percent`, `min_amount`, `max_discount`, `valid_from`, `valid_to`, `status`, `created_at`) VALUES
+('SUMMER50', 'Giảm giá mùa hè 50%', 50, 10000.00, 50000.00, '2025-01-01 00:00:00', '2025-12-31 23:59:59', 'active', NOW()),
+('WELCOME10', 'Mã chào mừng 10%', 10, NULL, 20000.00, '2025-01-01 00:00:00', '2025-12-31 23:59:59', 'active', NOW()),
+('VIP20', 'Giảm giá VIP 20%', 20, 50000.00, 100000.00, '2025-01-01 00:00:00', '2025-12-31 23:59:59', 'active', NOW())
+ON DUPLICATE KEY UPDATE code = VALUES(code);
+
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

@@ -108,6 +108,32 @@ exports.validateUserUpdate = [
 ];
 
 /**
+ * Validation middleware for booking creation
+ */
+exports.validateBooking = [
+  body('station_id')
+    .notEmpty().withMessage('Station ID is required')
+    .isInt({ min: 1 }).withMessage('Station ID must be a positive integer'),
+  
+  body('vehicle_type')
+    .notEmpty().withMessage('Vehicle type is required')
+    .isIn(['xe_may_usb', 'xe_may_ccs', 'oto_ccs']).withMessage('Invalid vehicle type. Allowed: xe_may_usb, xe_may_ccs, oto_ccs'),
+  
+  body('start_time')
+    .notEmpty().withMessage('Start time is required')
+    .isISO8601().withMessage('Start time must be a valid datetime (ISO 8601 format)'),
+  
+  body('end_time')
+    .notEmpty().withMessage('End time is required')
+    .isISO8601().withMessage('End time must be a valid datetime (ISO 8601 format)'),
+  
+  body('promo_code')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 50 }).withMessage('Promo code must be between 1 and 50 characters')
+];
+
+/**
  * Validation middleware for forgot password
  */
 exports.validateForgotPassword = [
