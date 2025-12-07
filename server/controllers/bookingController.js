@@ -69,9 +69,16 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
-    // 2. Calculate base cost
-    const batteryCapacity = BATTERY_CAPACITY[vehicle_type];
-    if (!batteryCapacity) {
+    // 2. Validate vehicle_type matches station_type
+    const vehicleTypeMap = {
+      'xe_may_usb': 'xe_may',
+      'xe_may_ccs': 'xe_may',
+      'oto_ccs': 'oto'
+    };
+
+    const requiredStationType = vehicleTypeMap[vehicle_type];
+    
+    if (!requiredStationType) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
@@ -79,12 +86,23 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
+    // Check if station supports this vehicle type
+    if (station.station_type !== 'ca_hai' && station.station_type !== requiredStationType) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `This station (${station.station_type}) does not support ${vehicle_type}. Please choose a compatible station.`
+      });
+    }
+
+    // 3. Calculate base cost
+    const batteryCapacity = BATTERY_CAPACITY[vehicle_type];
     const baseCost = batteryCapacity * parseFloat(station.price_per_kwh);
     let discountAmount = 0;
     let promoId = null;
     let totalCost = baseCost;
 
-    // 3. Validate & apply promo code (if provided)
+    // 4. Validate & apply promo code (if provided)
     if (promo_code) {
       const now = new Date();
       const promotion = await Promotion.findOne({
@@ -127,7 +145,7 @@ exports.createBooking = async (req, res, next) => {
       promoId = promotion.promo_id;
     }
 
-    // 4. Create booking
+    // 5. Create booking
     const booking = await Booking.create({
       user_id,
       station_id,
@@ -139,12 +157,12 @@ exports.createBooking = async (req, res, next) => {
       status: 'pending'
     }, { transaction });
 
-    // 5. Update station available_slots
+    // 6. Update station available_slots
     await station.update({
       available_slots: station.available_slots - 1
     }, { transaction });
 
-    // 6. Create notification
+    // 7. Create notification
     await Notification.create({
       user_id,
       title: 'Đặt lịch thành công',
