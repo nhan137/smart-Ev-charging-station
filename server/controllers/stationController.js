@@ -359,40 +359,137 @@ exports.getAllStations = async (req, res, next) => {
 };
 
 /**
- * Get single station by ID
- * GET /api/stations/:id
+ * Get single station by ID with details
+ * GET /api/stations/:station_id
  */
 exports.getStationById = async (req, res, next) => {
   try {
-    const station = await Station.findByPk(req.params.id, {
-      include: [{
-        model: Feedback,
-        as: 'feedbacks',
-        attributes: ['feedback_id', 'user_id', 'rating', 'comment', 'created_at'],
-        required: false
-      }]
+    // Support both :id and :station_id params
+    const stationId = req.params.id || req.params.station_id;
+    
+    if (!stationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Station ID is required'
+      });
+    }
+
+    // 1. Get station info with manager name
+    const stationQuery = `
+      SELECT 
+        s.*,
+        u.full_name as manager_name
+      FROM stations s
+      LEFT JOIN users u ON s.manager_id = u.user_id
+      WHERE s.station_id = :stationId
+    `;
+
+    const stations = await sequelize.query(stationQuery, {
+      replacements: { stationId },
+      type: Sequelize.QueryTypes.SELECT
     });
 
-    if (!station) {
+    if (!stations || stations.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Station not found'
       });
     }
 
-    // Calculate average rating
-    const feedbacks = station.feedbacks || [];
-    const avgRating = feedbacks.length > 0
-      ? feedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbacks.length
-      : null;
+    const station = stations[0];
 
-    const stationData = station.toJSON();
-    stationData.avg_rating = avgRating ? parseFloat(avgRating.toFixed(2)) : null;
-    stationData.feedback_count = feedbacks.length;
+    // 2. Get rating statistics
+    const ratingStatsQuery = `
+      SELECT 
+        AVG(rating) as avg_rating,
+        COUNT(*) as total_reviews,
+        SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as five_stars,
+        SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as four_stars,
+        SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as three_stars,
+        SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as two_stars,
+        SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as one_star
+      FROM feedbacks
+      WHERE station_id = :stationId
+    `;
+
+    const ratingStatsResult = await sequelize.query(ratingStatsQuery, {
+      replacements: { stationId },
+      type: Sequelize.QueryTypes.SELECT
+    });
+
+    const ratingStats = ratingStatsResult[0] || {};
+
+    // 3. Get latest 5 reviews
+    const recentFeedbacksQuery = `
+      SELECT 
+        f.feedback_id,
+        f.user_id,
+        f.rating,
+        f.comment,
+        f.created_at,
+        u.full_name as user_name
+      FROM feedbacks f
+      JOIN users u ON f.user_id = u.user_id
+      WHERE f.station_id = :stationId
+      ORDER BY f.created_at DESC
+      LIMIT 5
+    `;
+
+    const recentFeedbacks = await sequelize.query(recentFeedbacksQuery, {
+      replacements: { stationId },
+      type: Sequelize.QueryTypes.SELECT
+    });
+
+    // Format station data
+    const stationData = {
+      station_id: station.station_id,
+      station_name: station.station_name,
+      address: station.address,
+      latitude: station.latitude ? parseFloat(station.latitude) : null,
+      longitude: station.longitude ? parseFloat(station.longitude) : null,
+      price_per_kwh: parseFloat(station.price_per_kwh),
+      station_type: station.station_type,
+      total_slots: parseInt(station.total_slots),
+      available_slots: parseInt(station.available_slots),
+      charging_power: station.charging_power ? parseFloat(station.charging_power) : null,
+      connector_types: station.connector_types,
+      opening_hours: station.opening_hours,
+      avatar_url: station.avatar_url,
+      contact_phone: station.contact_phone,
+      status: station.status,
+      manager_id: station.manager_id,
+      manager_name: station.manager_name || null,
+      created_at: station.created_at
+    };
+
+    // Format rating statistics
+    const ratingStatsData = {
+      avg_rating: ratingStats.avg_rating ? parseFloat(parseFloat(ratingStats.avg_rating).toFixed(2)) : 0,
+      total_reviews: parseInt(ratingStats.total_reviews) || 0,
+      five_stars: parseInt(ratingStats.five_stars) || 0,
+      four_stars: parseInt(ratingStats.four_stars) || 0,
+      three_stars: parseInt(ratingStats.three_stars) || 0,
+      two_stars: parseInt(ratingStats.two_stars) || 0,
+      one_star: parseInt(ratingStats.one_star) || 0
+    };
+
+    // Format recent feedbacks
+    const recentFeedbacksData = recentFeedbacks.map(feedback => ({
+      feedback_id: feedback.feedback_id,
+      user_id: feedback.user_id,
+      user_name: feedback.user_name,
+      rating: parseInt(feedback.rating),
+      comment: feedback.comment,
+      created_at: feedback.created_at
+    }));
 
     res.status(200).json({
       success: true,
-      data: stationData
+      data: {
+        station: stationData,
+        rating_stats: ratingStatsData,
+        recent_feedbacks: recentFeedbacksData
+      }
     });
   } catch (error) {
     next(error);
