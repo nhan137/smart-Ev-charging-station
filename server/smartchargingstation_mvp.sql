@@ -191,6 +191,17 @@ CREATE TABLE `stations` (
   `manager_id` int(11) DEFAULT NULL COMMENT 'ID manager quản lý trạm',
   `created_at` datetime DEFAULT current_timestamp() COMMENT 'Ngày tạo trạm'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- --------------------------------------------------------
+--
+-- Dữ liệu mẫu cho bảng `stations` - 5 trạm sạc ở Đà Nẵng
+--
+
+INSERT INTO `stations` (`station_name`, `address`, `latitude`, `longitude`, `price_per_kwh`, `station_type`, `total_slots`, `available_slots`, `charging_power`, `connector_types`, `opening_hours`, `avatar_url`, `contact_phone`, `status`, `manager_id`, `created_at`) VALUES
+('Trạm Sạc Cầu Rồng', '123 Trần Phú, Hải Châu, Đà Nẵng - Gần Cầu Rồng và Bãi biển Mỹ Khê', 16.061400, 108.226700, 3500.00, 'ca_hai', 6, 3, 50.00, 'Type 2, CCS2, CHAdeMO', '24/7', 'https://picsum.photos/400/300?random=1', '0901234567', 'active', NULL, NOW()),
+('Trạm Sạc Sơn Trà Premium', '456 Võ Nguyên Giáp, Sơn Trà, Đà Nẵng - Khu vực Bán đảo Sơn Trà', 16.100000, 108.250000, 3200.00, 'oto', 8, 5, 100.00, 'Type 2, CCS2', '24/7', 'https://picsum.photos/400/300?random=2', '0901234568', 'active', NULL, NOW()),
+('Trạm Sạc Ngũ Hành Sơn', '789 Nguyễn Tất Thành, Ngũ Hành Sơn, Đà Nẵng - Gần Chùa Linh Ứng', 16.000000, 108.250000, 3000.00, 'ca_hai', 10, 7, 60.00, 'Type 2, CCS2, CHAdeMO, GB/T', '06:00-22:00', 'https://picsum.photos/400/300?random=3', '0901234569', 'active', NULL, NOW()),
+('Trạm Sạc Thanh Khê Express', '321 Điện Biên Phủ, Thanh Khê, Đà Nẵng - Trung tâm thương mại', 16.054400, 108.202200, 3300.00, 'xe_may', 5, 2, 20.00, 'Type 2, Schuko', '24/7', 'https://picsum.photos/400/300?random=4', '0901234570', 'active', NULL, NOW()),
+('Trạm Sạc Hải Châu Center', '555 Lê Duẩn, Hải Châu, Đà Nẵng - Trung tâm thành phố', 16.054400, 108.202200, 3800.00, 'ca_hai', 12, 8, 75.00, 'Type 2, CCS2, CHAdeMO, USB-C', '07:00-23:00', 'https://picsum.photos/400/300?random=5', '0901234571', 'active', NULL, NOW());
 
 -- --------------------------------------------------------
 

@@ -8,6 +8,7 @@ const errorHandler = require('./middleware/errorHandler');
 // Import routes
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
+const stationRoutes = require('./routes/stationRoutes');
 
 // Initialize Express app
 const app = express();
@@ -48,6 +49,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/stations', stationRoutes);
 
 // 404 handler
 app.use((req, res) => {
