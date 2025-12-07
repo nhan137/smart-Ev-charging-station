@@ -220,7 +220,11 @@ CREATE TABLE `users` (
   `created_at` datetime DEFAULT current_timestamp() COMMENT 'Ngày tạo tài khoản'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
+--ALTER TABLE `users` 
+ADD COLUMN `reset_password_token` VARCHAR(255) NULL DEFAULT NULL AFTER `created_at`,
+ADD COLUMN `reset_password_expires` DATETIME NULL DEFAULT NULL AFTER `reset_password_token`;
+
+CREATE INDEX `idx_reset_token` ON `users` (`reset_password_token`);
 -- Chỉ mục cho các bảng đã đổ
 --
 

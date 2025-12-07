@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
 const { generateToken } = require('../middleware/auth');
+const crypto = require('crypto');
+const { Op } = require('sequelize');
 
 /**
  * Register new user
@@ -132,6 +134,127 @@ exports.getMe = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: req.user
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Forgot password - Send reset token to email
+ * POST /api/auth/forgot-password
+ */
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email } = req.body;
+
+    // Find user by email
+    const user = await User.findOne({ where: { email } });
+
+    // Always return success message (security best practice - don't reveal if email exists)
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: 'If that email exists, a password reset link has been sent.'
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    
+    // Set token expiry (1 hour from now)
+    const resetTokenExpires = new Date();
+    resetTokenExpires.setHours(resetTokenExpires.getHours() + 1);
+
+    // Save token to database
+    await user.update({
+      reset_password_token: resetTokenHash,
+      reset_password_expires: resetTokenExpires
+    });
+
+    // Generate reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/reset-password?token=${resetToken}`;
+
+    // TODO: Send email with reset link
+    // For now, log to console (in production, use nodemailer or similar)
+    console.log('=== PASSWORD RESET EMAIL ===');
+    console.log(`To: ${user.email}`);
+    console.log(`Subject: Đặt lại mật khẩu - Smart EV Charging Station`);
+    console.log(`Reset Link: ${resetUrl}`);
+    console.log('============================');
+
+    res.status(200).json({
+      success: true,
+      message: 'If that email exists, a password reset link has been sent.',
+      // In development, return the reset URL for testing
+      ...(process.env.NODE_ENV === 'development' && {
+        resetUrl: resetUrl,
+        token: resetToken
+      })
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Reset password with token
+ * POST /api/auth/reset-password
+ */
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { token, password, newPassword } = req.body;
+    // Accept both 'password' and 'newPassword' for flexibility
+    const finalPassword = newPassword || password;
+
+    // Hash the token to compare with database
+    const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with valid token
+    const user = await User.findOne({
+      where: {
+        reset_password_token: resetTokenHash,
+        reset_password_expires: {
+          [Op.gt]: new Date() // Token not expired
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+    }
+
+    // Update password and clear reset token
+    user.password = finalPassword; // Will be hashed by beforeUpdate hook
+    user.reset_password_token = null;
+    user.reset_password_expires = null;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password has been reset successfully. Please login with your new password.'
     });
   } catch (error) {
     next(error);

@@ -107,3 +107,41 @@ exports.validateUserUpdate = [
     .isIn(['active', 'locked']).withMessage('Status must be active or locked')
 ];
 
+/**
+ * Validation middleware for forgot password
+ */
+exports.validateForgotPassword = [
+  body('email')
+    .trim()
+    .notEmpty().withMessage('Email is required')
+    .isEmail().withMessage('Please provide a valid email')
+    .normalizeEmail()
+];
+
+/**
+ * Validation middleware for reset password
+ * Accepts both 'password' and 'newPassword' fields
+ */
+exports.validateResetPassword = [
+  body('token')
+    .notEmpty().withMessage('Reset token is required'),
+  
+  // Validate password field (if provided)
+  body('password')
+    .optional()
+    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  
+  // Validate newPassword field (if provided)
+  body('newPassword')
+    .optional()
+    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  
+  // Custom validation: at least one password field must be provided
+  body().custom((value, { req }) => {
+    if (!value.password && !value.newPassword) {
+      throw new Error('Password or newPassword is required');
+    }
+    return true;
+  })
+];
+
