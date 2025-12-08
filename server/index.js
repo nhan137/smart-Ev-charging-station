@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
 const { connectDB } = require('./config/database');
@@ -11,8 +13,23 @@ const authRoutes = require('./routes/authRoutes');
 const stationRoutes = require('./routes/stationRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 
-// Initialize Express app
+// Initialize Express app and HTTP server
 const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.IO
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CORS_ORIGIN 
+      ? process.env.CORS_ORIGIN.split(',')
+      : ['http://localhost:5173', 'http://localhost:5174'],
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+// Make io accessible to routes
+app.set('io', io);
 
 // Connect to database
 connectDB();
@@ -53,6 +70,10 @@ app.use('/api/users', userRoutes);
 app.use('/api/stations', stationRoutes);
 app.use('/api/bookings', bookingRoutes);
 
+// Internal API Routes (for IoT simulator)
+const chargingController = require('./controllers/chargingController');
+app.post('/internal/charging-update/:booking_id', chargingController.receiveChargingUpdate);
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ 
@@ -64,12 +85,42 @@ app.use((req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log(`[Socket.IO] Client connected: ${socket.id}`);
+
+  // Join booking room
+  socket.on('join_booking_room', (bookingId) => {
+    const room = `booking_${bookingId}`;
+    socket.join(room);
+    console.log(`[Socket.IO] Client ${socket.id} joined room: ${room}`);
+    
+    socket.emit('room_joined', {
+      success: true,
+      room: room,
+      booking_id: bookingId
+    });
+  });
+
+  // Leave booking room
+  socket.on('leave_booking_room', (bookingId) => {
+    const room = `booking_${bookingId}`;
+    socket.leave(room);
+    console.log(`[Socket.IO] Client ${socket.id} left room: ${room}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
+  });
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`Socket.IO server is ready`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-module.exports = app;
+module.exports = { app, server, io };
 
