@@ -1,0 +1,520 @@
+import { useState, useEffect } from 'react';
+import { Filter, Lock, Unlock, Edit, Trash2, Shield, Search, Eye, UserPlus } from 'lucide-react';
+import ConfirmModal from '../../components/shared/ConfirmModal';
+import AlertModal from '../../components/shared/AlertModal';
+import AssignRoleModal from './components/AssignRoleModal';
+import UserDetailModal from './components/UserDetailModal';
+import EditUserModal from './components/EditUserModal';
+import CreateUserModal from './components/CreateUserModal';
+import './UserManagement.css';
+
+interface User {
+  user_id: number;
+  full_name: string;
+  email: string;
+  phone: string;
+  role_id: number;
+  role_name: string;
+  status: 'active' | 'locked';
+  created_at: string;
+}
+
+const UserManagement = () => {
+  const [users, setUsers] = useState<User[]>([]);
+  const [filterRole, setFilterRole] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [confirmModal, setConfirmModal] = useState({
+    show: false,
+    title: '',
+    message: '',
+    type: 'warning' as 'warning' | 'danger' | 'info',
+    onConfirm: () => {}
+  });
+  const [alertModal, setAlertModal] = useState({
+    show: false,
+    title: '',
+    message: '',
+    type: 'success' as 'success' | 'error' | 'info'
+  });
+  const [assignRoleModal, setAssignRoleModal] = useState<{
+    show: boolean;
+    user: User | null;
+  }>({
+    show: false,
+    user: null
+  });
+  const [detailModal, setDetailModal] = useState<{
+    show: boolean;
+    user: User | null;
+  }>({
+    show: false,
+    user: null
+  });
+  const [editModal, setEditModal] = useState<{
+    show: boolean;
+    user: User | null;
+  }>({
+    show: false,
+    user: null
+  });
+  const [createModal, setCreateModal] = useState(false);
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = () => {
+    // Mock data
+    const mockUsers: User[] = [
+      {
+        user_id: 1,
+        full_name: 'Nguyễn Văn A',
+        email: 'nguyenvana@gmail.com',
+        phone: '0901234567',
+        role_id: 1,
+        role_name: 'User',
+        status: 'active',
+        created_at: '2025-01-15T10:00:00'
+      },
+      {
+        user_id: 2,
+        full_name: 'Trần Thị B',
+        email: 'tranthib@gmail.com',
+        phone: '0901234568',
+        role_id: 2,
+        role_name: 'Manager',
+        status: 'active',
+        created_at: '2025-01-16T11:00:00'
+      },
+      {
+        user_id: 3,
+        full_name: 'Lê Văn C',
+        email: 'levanc@gmail.com',
+        phone: '0901234569',
+        role_id: 1,
+        role_name: 'User',
+        status: 'locked',
+        created_at: '2025-01-17T12:00:00'
+      },
+      {
+        user_id: 4,
+        full_name: 'Admin System',
+        email: 'admin@evcharge.com',
+        phone: '0236388899',
+        role_id: 3,
+        role_name: 'Admin',
+        status: 'active',
+        created_at: '2025-01-01T00:00:00'
+      }
+    ];
+    setUsers(mockUsers);
+  };
+
+  const filteredUsers = users.filter(user => {
+    if (filterRole && user.role_id !== Number(filterRole)) return false;
+    if (filterStatus && user.status !== filterStatus) return false;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        user.full_name.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query) ||
+        user.phone.includes(query)
+      );
+    }
+    return true;
+  });
+
+  const handleLockUser = (user: User) => {
+    setConfirmModal({
+      show: true,
+      title: 'Khóa tài khoản?',
+      message: `Bạn có chắc chắn muốn khóa tài khoản của ${user.full_name}?`,
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          // TODO: Call API
+          // await userService.lockUser(user.user_id);
+          
+          setAlertModal({
+            show: true,
+            title: 'Thành công!',
+            message: `Đã khóa tài khoản ${user.full_name}`,
+            type: 'success'
+          });
+          loadUsers();
+        } catch (error: any) {
+          setAlertModal({
+            show: true,
+            title: 'Lỗi',
+            message: error.message || 'Có lỗi xảy ra',
+            type: 'error'
+          });
+        }
+      }
+    });
+  };
+
+  const handleUnlockUser = (user: User) => {
+    setConfirmModal({
+      show: true,
+      title: 'Mở khóa tài khoản?',
+      message: `Bạn có chắc chắn muốn mở khóa tài khoản của ${user.full_name}?`,
+      type: 'info',
+      onConfirm: async () => {
+        try {
+          // TODO: Call API
+          // await userService.unlockUser(user.user_id);
+          
+          setAlertModal({
+            show: true,
+            title: 'Thành công!',
+            message: `Đã mở khóa tài khoản ${user.full_name}`,
+            type: 'success'
+          });
+          loadUsers();
+        } catch (error: any) {
+          setAlertModal({
+            show: true,
+            title: 'Lỗi',
+            message: error.message || 'Có lỗi xảy ra',
+            type: 'error'
+          });
+        }
+      }
+    });
+  };
+
+  const handleDeleteUser = (user: User) => {
+    setConfirmModal({
+      show: true,
+      title: 'Xóa người dùng?',
+      message: `Bạn có chắc chắn muốn xóa ${user.full_name}? Hành động này không thể hoàn tác.`,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          // TODO: Call API
+          // await userService.deleteUser(user.user_id);
+          
+          setAlertModal({
+            show: true,
+            title: 'Thành công!',
+            message: `Đã xóa người dùng ${user.full_name}`,
+            type: 'success'
+          });
+          loadUsers();
+        } catch (error: any) {
+          setAlertModal({
+            show: true,
+            title: 'Lỗi',
+            message: error.message || 'Có lỗi xảy ra',
+            type: 'error'
+          });
+        }
+      }
+    });
+  };
+
+  const handleAssignRole = (user: User) => {
+    setAssignRoleModal({
+      show: true,
+      user: user
+    });
+  };
+
+  const handleConfirmAssignRole = async (newRole: string) => {
+    if (!assignRoleModal.user) return;
+
+    try {
+      // TODO: Call API
+      // await userService.updateRole(assignRoleModal.user.user_id, newRole);
+      
+      const roleNames: any = {
+        'user': 'User',
+        'manager': 'Manager',
+        'admin': 'Admin'
+      };
+
+      setAlertModal({
+        show: true,
+        title: 'Thành công!',
+        message: `Đã cập nhật vai trò của ${assignRoleModal.user.full_name} thành ${roleNames[newRole]}`,
+        type: 'success'
+      });
+      loadUsers();
+    } catch (error: any) {
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Có lỗi xảy ra',
+        type: 'error'
+      });
+    }
+  };
+
+  const handleEditUser = async (data: any) => {
+    if (!editModal.user) return;
+
+    try {
+      // TODO: Call API
+      // await userService.updateUser(editModal.user.user_id, data);
+      
+      setAlertModal({
+        show: true,
+        title: 'Thành công!',
+        message: `Đã cập nhật thông tin của ${data.full_name}`,
+        type: 'success'
+      });
+      loadUsers();
+    } catch (error: any) {
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Có lỗi xảy ra',
+        type: 'error'
+      });
+    }
+  };
+
+  const handleCreateUser = async (data: any) => {
+    try {
+      // TODO: Call API
+      // await userService.createUser(data);
+      
+      setAlertModal({
+        show: true,
+        title: 'Thành công!',
+        message: `Đã tạo người dùng ${data.full_name}`,
+        type: 'success'
+      });
+      loadUsers();
+    } catch (error: any) {
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Có lỗi xảy ra',
+        type: 'error'
+      });
+    }
+  };
+
+  const getRoleBadge = (roleName: string) => {
+    const roleConfig: any = {
+      'User': { class: 'role-user', icon: '👤' },
+      'Manager': { class: 'role-manager', icon: '👔' },
+      'Admin': { class: 'role-admin', icon: '👑' }
+    };
+    const config = roleConfig[roleName] || roleConfig['User'];
+    return (
+      <span className={`role-badge ${config.class}`}>
+        <span>{config.icon}</span>
+        {roleName}
+      </span>
+    );
+  };
+
+  const getStatusBadge = (status: string) => {
+    return status === 'active' ? (
+      <span className="status-badge status-active">Hoạt động</span>
+    ) : (
+      <span className="status-badge status-locked">Đã khóa</span>
+    );
+  };
+
+  return (
+    <div className="user-management">
+      <div className="page-header-admin">
+        <div>
+          <h1>Quản lý Người dùng</h1>
+          <p>Quản lý tất cả người dùng trong hệ thống</p>
+        </div>
+        <button className="btn-add-user" onClick={() => setCreateModal(true)}>
+          <UserPlus size={20} />
+          <span>Thêm người dùng</span>
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="filter-section">
+        <div className="search-box">
+          <Search size={20} />
+          <input
+            type="text"
+            placeholder="Tìm kiếm theo tên, email, SĐT..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        <div className="filter-group">
+          <Filter size={20} />
+          <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)}>
+            <option value="">Tất cả vai trò</option>
+            <option value="1">User</option>
+            <option value="2">Manager</option>
+            <option value="3">Admin</option>
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <Filter size={20} />
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="">Tất cả trạng thái</option>
+            <option value="active">Hoạt động</option>
+            <option value="locked">Đã khóa</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-value">{users.length}</div>
+          <div className="stat-label">Tổng người dùng</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{users.filter(u => u.status === 'active').length}</div>
+          <div className="stat-label">Đang hoạt động</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{users.filter(u => u.status === 'locked').length}</div>
+          <div className="stat-label">Đã khóa</div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Họ tên</th>
+              <th>Email</th>
+              <th>SĐT</th>
+              <th>Vai trò</th>
+              <th>Trạng thái</th>
+              <th>Ngày tạo</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredUsers.map((user) => (
+              <tr key={user.user_id}>
+                <td className="id-cell">#{user.user_id}</td>
+                <td className="name-cell">{user.full_name}</td>
+                <td>{user.email}</td>
+                <td>{user.phone}</td>
+                <td>{getRoleBadge(user.role_name)}</td>
+                <td>{getStatusBadge(user.status)}</td>
+                <td>{new Date(user.created_at).toLocaleDateString('vi-VN')}</td>
+                <td>
+                  <div className="action-buttons">
+                    <button
+                      className="action-btn btn-view"
+                      onClick={() => setDetailModal({ show: true, user })}
+                      title="Xem chi tiết"
+                    >
+                      <Eye size={16} />
+                    </button>
+                    {user.status === 'active' ? (
+                      <button
+                        className="action-btn btn-lock"
+                        onClick={() => handleLockUser(user)}
+                        title="Khóa"
+                      >
+                        <Lock size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        className="action-btn btn-unlock"
+                        onClick={() => handleUnlockUser(user)}
+                        title="Mở khóa"
+                      >
+                        <Unlock size={16} />
+                      </button>
+                    )}
+                    <button
+                      className="action-btn btn-edit"
+                      onClick={() => setEditModal({ show: true, user })}
+                      title="Chỉnh sửa"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    <button
+                      className="action-btn btn-permission"
+                      onClick={() => handleAssignRole(user)}
+                      title="Phân quyền"
+                    >
+                      <Shield size={16} />
+                    </button>
+                    <button
+                      className="action-btn btn-delete"
+                      onClick={() => handleDeleteUser(user)}
+                      title="Xóa"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.show}
+        onClose={() => setConfirmModal({ ...confirmModal, show: false })}
+        onConfirm={() => {
+          confirmModal.onConfirm();
+          setConfirmModal({ ...confirmModal, show: false });
+        }}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.show}
+        onClose={() => setAlertModal({ ...alertModal, show: false })}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+      />
+
+      {/* Assign Role Modal */}
+      <AssignRoleModal
+        isOpen={assignRoleModal.show}
+        onClose={() => setAssignRoleModal({ show: false, user: null })}
+        onConfirm={handleConfirmAssignRole}
+        user={assignRoleModal.user}
+      />
+
+      {/* User Detail Modal */}
+      <UserDetailModal
+        isOpen={detailModal.show}
+        onClose={() => setDetailModal({ show: false, user: null })}
+        user={detailModal.user}
+      />
+
+      {/* Edit User Modal */}
+      <EditUserModal
+        isOpen={editModal.show}
+        onClose={() => setEditModal({ show: false, user: null })}
+        onSubmit={handleEditUser}
+        user={editModal.user}
+      />
+
+      {/* Create User Modal */}
+      <CreateUserModal
+        isOpen={createModal}
+        onClose={() => setCreateModal(false)}
+        onSubmit={handleCreateUser}
+      />
+    </div>
+  );
+};
+
+export default UserManagement;
