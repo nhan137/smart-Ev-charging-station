@@ -16,5 +16,8 @@ router.post('/', authenticate, validateBooking, bookingController.createBooking)
 // GET /api/bookings/:booking_id/charging/status - Get charging status (protected)
 router.get('/:booking_id/charging/status', authenticate, chargingController.getChargingStatus);
 
+// POST /api/bookings/:booking_id/charging/complete - Complete charging manually (protected)
+router.post('/:booking_id/charging/complete', authenticate, chargingController.completeCharging);
+
 module.exports = router;
 
