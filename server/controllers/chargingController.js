@@ -288,3 +288,110 @@ exports.receiveChargingUpdate = async (req, res, next) => {
   }
 };
 
+/**
+ * Complete charging manually (called by Frontend when user clicks "Stop" button)
+ * POST /api/bookings/:booking_id/charging/complete
+ */
+exports.completeCharging = async (req, res, next) => {
+  try {
+    const bookingId = req.params.booking_id;
+    const userId = req.user.user_id;
+
+    // 1. Verify user owns this booking
+    const booking = await Booking.findOne({
+      where: {
+        booking_id: bookingId,
+        user_id: userId
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found or you do not have permission'
+      });
+    }
+
+    // 2. Get charging session
+    let chargingSession = await ChargingSession.findOne({
+      where: { booking_id: bookingId }
+    });
+
+    if (!chargingSession) {
+      return res.status(404).json({
+        success: false,
+        message: 'Charging session not found. Please start charging first.'
+      });
+    }
+
+    // 3. Check if already completed
+    if (chargingSession.ended_at) {
+      return res.status(400).json({
+        success: false,
+        message: 'Charging session already completed'
+      });
+    }
+
+    // 4. Get station info
+    const station = await Station.findByPk(booking.station_id);
+    if (!station) {
+      return res.status(404).json({
+        success: false,
+        message: 'Station not found'
+      });
+    }
+    const pricePerKwh = parseFloat(station.price_per_kwh);
+
+    // 5. Get current values from last update
+    const endBatteryPercent = chargingSession.start_battery_percent || 0;
+    const energyConsumed = parseFloat(chargingSession.energy_consumed || 0);
+    const now = new Date();
+    const actualCost = energyConsumed * pricePerKwh;
+
+    // 6. Update charging session
+    await chargingSession.update({
+      end_battery_percent: endBatteryPercent,
+      ended_at: now,
+      actual_cost: actualCost
+    });
+
+    // 7. Update booking status
+    await booking.update({
+      status: 'completed',
+      actual_end: now
+    });
+
+    // 8. Prepare Socket.IO update
+    const updateData = {
+      booking_id: parseInt(bookingId),
+      station_name: station.station_name,
+      status: 'completed',
+      current_battery_percent: endBatteryPercent,
+      end_battery_percent: endBatteryPercent,
+      energy_consumed: parseFloat(energyConsumed.toFixed(3)),
+      estimated_cost: parseFloat(actualCost.toFixed(2)),
+      actual_cost: parseFloat(actualCost.toFixed(2)),
+      time_remaining: '0 giờ 0 phút',
+      is_completed: true,
+      ended_at: now
+    };
+
+    // 9. Emit Socket.IO event
+    const io = req.app.get('io');
+    if (io) {
+      const socketRoom = `booking_${bookingId}`;
+      io.to(socketRoom).emit('charging_update', updateData);
+      io.to(socketRoom).emit('charging_completed', updateData);
+      console.log(`[Socket.IO] Emitted charging_completed to room: ${socketRoom}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Charging completed successfully',
+      data: updateData
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

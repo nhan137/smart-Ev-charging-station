@@ -1,6 +1,5 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
-const Booking = require('./Booking');
 
 /**
  * Payment Model
@@ -47,10 +46,6 @@ const Payment = sequelize.define('payments', {
   tableName: 'payments',
   timestamps: false
 });
-
-// Define associations
-Payment.belongsTo(Booking, { foreignKey: 'booking_id', as: 'booking' });
-Booking.hasOne(Payment, { foreignKey: 'booking_id', as: 'payment' });
 
 module.exports = Payment;
 

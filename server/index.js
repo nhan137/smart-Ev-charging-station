@@ -7,6 +7,18 @@ require('dotenv').config();
 const { connectDB } = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 
+// Load all models first
+const Booking = require('./models/Booking');
+const ChargingSession = require('./models/ChargingSession');
+const Payment = require('./models/Payment');
+
+// Define associations after all models are loaded
+Booking.hasOne(ChargingSession, { foreignKey: 'booking_id', as: 'chargingSession' });
+ChargingSession.belongsTo(Booking, { foreignKey: 'booking_id', as: 'booking' });
+
+Booking.hasOne(Payment, { foreignKey: 'booking_id', as: 'payment' });
+Payment.belongsTo(Booking, { foreignKey: 'booking_id', as: 'booking' });
+
 // Import routes
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
