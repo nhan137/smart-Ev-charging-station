@@ -171,3 +171,25 @@ exports.validateResetPassword = [
   })
 ];
 
+/**
+ * Validation middleware for feedback creation
+ */
+exports.validateFeedback = [
+  body('station_id')
+    .notEmpty().withMessage('Station ID is required')
+    .isInt({ min: 1 }).withMessage('Station ID must be a positive integer'),
+  
+  body('booking_id')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Booking ID must be a positive integer'),
+  
+  body('rating')
+    .notEmpty().withMessage('Rating is required')
+    .isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
+  
+  body('comment')
+    .optional()
+    .trim()
+    .isLength({ max: 1000 }).withMessage('Comment cannot exceed 1000 characters')
+];
+
