@@ -193,3 +193,12 @@ exports.validateFeedback = [
     .isLength({ max: 1000 }).withMessage('Comment cannot exceed 1000 characters')
 ];
 
+/**
+ * Validation middleware for favorite creation
+ */
+exports.validateFavorite = [
+  body('station_id')
+    .notEmpty().withMessage('Station ID is required')
+    .isInt({ min: 1 }).withMessage('Station ID must be a positive integer')
+];
+
