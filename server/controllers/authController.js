@@ -125,6 +125,150 @@ exports.login = async (req, res, next) => {
 };
 
 /**
+ * Manager Login
+ * POST /api/auth/manager/login
+ */
+exports.managerLogin = async (req, res, next) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, password } = req.body;
+
+    // Find user by email (include password for comparison)
+    const user = await User.findOne({
+      where: { email }
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Check if account is active
+    if (user.status !== 'active') {
+      return res.status(401).json({
+        success: false,
+        message: 'Account is locked. Please contact administrator.'
+      });
+    }
+
+    // Check password
+    const isPasswordValid = await user.comparePassword(password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Check if user is Manager (role_id = 2)
+    if (user.role_id !== 2) {
+      return res.status(403).json({
+        success: false,
+        error: 'Tài khoản không có quyền Manager'
+      });
+    }
+
+    // Generate JWT token
+    const token = generateToken(user.user_id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Manager login successful',
+      data: {
+        user: user, // Password is automatically excluded by toJSON()
+        token
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin Login
+ * POST /api/auth/admin/login
+ */
+exports.adminLogin = async (req, res, next) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, password } = req.body;
+
+    // Find user by email (include password for comparison)
+    const user = await User.findOne({
+      where: { email }
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Check if account is active
+    if (user.status !== 'active') {
+      return res.status(401).json({
+        success: false,
+        message: 'Account is locked. Please contact administrator.'
+      });
+    }
+
+    // Check password
+    const isPasswordValid = await user.comparePassword(password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Check if user is Admin (role_id = 3)
+    if (user.role_id !== 3) {
+      return res.status(403).json({
+        success: false,
+        error: 'Tài khoản không có quyền Admin'
+      });
+    }
+
+    // Generate JWT token
+    const token = generateToken(user.user_id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Admin login successful',
+      data: {
+        user: user, // Password is automatically excluded by toJSON()
+        token
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Get current user (protected route)
  * GET /api/auth/me
  */

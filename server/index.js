@@ -27,6 +27,7 @@ const bookingRoutes = require('./routes/bookingRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const favoriteRoutes = require('./routes/favoriteRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 // Initialize Express app and HTTP server
 const app = express();
@@ -87,6 +88,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/feedbacks', feedbackRoutes);
 app.use('/api/favorites', favoriteRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Internal API Routes (for IoT simulator)
 const chargingController = require('./controllers/chargingController');

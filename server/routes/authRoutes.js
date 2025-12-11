@@ -15,6 +15,12 @@ router.post('/register', validateRegister, authController.register);
 // POST /api/auth/login - Login user
 router.post('/login', validateLogin, authController.login);
 
+// POST /api/auth/manager/login - Manager login (role_id = 2)
+router.post('/manager/login', validateLogin, authController.managerLogin);
+
+// POST /api/auth/admin/login - Admin login (role_id = 3)
+router.post('/admin/login', validateLogin, authController.adminLogin);
+
 // GET /api/auth/me - Get current user (protected)
 router.get('/me', authenticate, authController.getMe);
 

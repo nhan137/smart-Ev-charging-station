@@ -202,3 +202,40 @@ exports.validateFavorite = [
     .isInt({ min: 1 }).withMessage('Station ID must be a positive integer')
 ];
 
+/**
+ * Validation middleware for admin user update (allows email, no password)
+ * full_name, email and role_id are required for edit user modal
+ */
+exports.validateAdminUserUpdate = [
+  body('full_name')
+    .trim()
+    .notEmpty().withMessage('Full name is required')
+    .isLength({ min: 1, max: 100 }).withMessage('Full name must be between 1 and 100 characters'),
+  
+  body('email')
+    .trim()
+    .notEmpty().withMessage('Email is required')
+    .isEmail().withMessage('Please provide a valid email')
+    .normalizeEmail(),
+  
+  body('role_id')
+    .notEmpty().withMessage('Role ID is required')
+    .isInt({ min: 1, max: 2 }).withMessage('Role ID must be 1 (User) or 2 (Manager). Admin role cannot be assigned.'),
+  
+  body('phone')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 20 }).withMessage('Phone number cannot exceed 20 characters')
+    .matches(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/)
+    .withMessage('Please provide a valid phone number')
+];
+
+/**
+ * Validation middleware for user status update
+ */
+exports.validateUserStatus = [
+  body('status')
+    .notEmpty().withMessage('Status is required')
+    .isIn(['active', 'locked']).withMessage('Status must be active or locked')
+];
+
