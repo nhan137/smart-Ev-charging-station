@@ -11,6 +11,8 @@ const errorHandler = require('./middleware/errorHandler');
 const Booking = require('./models/Booking');
 const ChargingSession = require('./models/ChargingSession');
 const Payment = require('./models/Payment');
+const Station = require('./models/Station');
+const User = require('./models/User');
 
 // Define associations after all models are loaded
 Booking.hasOne(ChargingSession, { foreignKey: 'booking_id', as: 'chargingSession' });
@@ -18,6 +20,10 @@ ChargingSession.belongsTo(Booking, { foreignKey: 'booking_id', as: 'booking' });
 
 Booking.hasOne(Payment, { foreignKey: 'booking_id', as: 'payment' });
 Payment.belongsTo(Booking, { foreignKey: 'booking_id', as: 'booking' });
+
+// Station and User (manager) associations
+Station.belongsTo(User, { foreignKey: 'manager_id', as: 'manager' });
+User.hasMany(Station, { foreignKey: 'manager_id', as: 'managedStations' });
 
 // Import routes
 const userRoutes = require('./routes/userRoutes');

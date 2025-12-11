@@ -239,3 +239,117 @@ exports.validateUserStatus = [
     .isIn(['active', 'locked']).withMessage('Status must be active or locked')
 ];
 
+/**
+ * Validation middleware for station creation
+ */
+exports.validateStation = [
+  body('station_name')
+    .trim()
+    .notEmpty().withMessage('Station name is required')
+    .isLength({ min: 1, max: 100 }).withMessage('Station name must be between 1 and 100 characters'),
+  
+  body('address')
+    .trim()
+    .notEmpty().withMessage('Address is required')
+    .isLength({ min: 1, max: 255 }).withMessage('Address must be between 1 and 255 characters'),
+  
+  body('latitude')
+    .optional({ nullable: true })
+    .isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
+  
+  body('longitude')
+    .optional({ nullable: true })
+    .isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
+  
+  body('price_per_kwh')
+    .notEmpty().withMessage('Price per KWH is required')
+    .isFloat({ min: 0 }).withMessage('Price per KWH must be greater than or equal to 0'),
+  
+  body('station_type')
+    .notEmpty().withMessage('Station type is required')
+    .isIn(['xe_may', 'oto', 'ca_hai']).withMessage('Station type must be xe_may, oto, or ca_hai'),
+  
+  body('total_slots')
+    .notEmpty().withMessage('Total slots is required')
+    .isInt({ min: 1 }).withMessage('Total slots must be at least 1'),
+  
+  body('charging_power')
+    .optional({ nullable: true })
+    .isFloat({ min: 0 }).withMessage('Charging power must be greater than or equal to 0'),
+  
+  body('connector_types')
+    .optional({ nullable: true })
+    .trim()
+    .isLength({ max: 100 }).withMessage('Connector types cannot exceed 100 characters'),
+  
+  body('opening_hours')
+    .optional({ nullable: true })
+    .trim()
+    .isLength({ max: 100 }).withMessage('Opening hours cannot exceed 100 characters'),
+  
+  body('status')
+    .optional()
+    .isIn(['active', 'maintenance', 'inactive']).withMessage('Status must be active, maintenance, or inactive'),
+  
+  body('manager_id')
+    .optional({ nullable: true })
+    .isInt({ min: 1 }).withMessage('Manager ID must be a positive integer')
+];
+
+/**
+ * Validation middleware for station update
+ */
+exports.validateStationUpdate = [
+  body('station_name')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 100 }).withMessage('Station name must be between 1 and 100 characters'),
+  
+  body('address')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 255 }).withMessage('Address must be between 1 and 255 characters'),
+  
+  body('latitude')
+    .optional({ nullable: true })
+    .isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
+  
+  body('longitude')
+    .optional({ nullable: true })
+    .isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
+  
+  body('price_per_kwh')
+    .optional()
+    .isFloat({ min: 0 }).withMessage('Price per KWH must be greater than or equal to 0'),
+  
+  body('station_type')
+    .optional()
+    .isIn(['xe_may', 'oto', 'ca_hai']).withMessage('Station type must be xe_may, oto, or ca_hai'),
+  
+  body('total_slots')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Total slots must be at least 1'),
+  
+  body('charging_power')
+    .optional({ nullable: true })
+    .isFloat({ min: 0 }).withMessage('Charging power must be greater than or equal to 0'),
+  
+  body('connector_types')
+    .optional({ nullable: true })
+    .trim()
+    .isLength({ max: 100 }).withMessage('Connector types cannot exceed 100 characters'),
+  
+  body('opening_hours')
+    .optional({ nullable: true })
+    .trim()
+    .isLength({ max: 100 }).withMessage('Opening hours cannot exceed 100 characters'),
+  
+  body('status')
+    .optional()
+    .isIn(['active', 'maintenance', 'inactive']).withMessage('Status must be active, maintenance, or inactive'),
+  
+  body('manager_id')
+    .optional({ nullable: true })
+    .isInt({ min: 1 }).withMessage('Manager ID must be a positive integer')
+];
+
