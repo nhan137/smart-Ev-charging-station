@@ -1,6 +1,8 @@
 const Station = require('../models/Station');
 const User = require('../models/User');
 const Booking = require('../models/Booking');
+const Payment = require('../models/Payment');
+const ChargingSession = require('../models/ChargingSession');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
@@ -187,7 +189,7 @@ exports.createStation = async (req, res, next) => {
 };
 
 /**
- * Get station by ID
+ * Get station by ID with statistics
  * GET /api/admin/stations/:station_id
  */
 exports.getStationById = async (req, res, next) => {
@@ -210,11 +212,58 @@ exports.getStationById = async (req, res, next) => {
       });
     }
 
+    // Calculate statistics
+    // 1. Total bookings
+    const totalBookings = await Booking.count({
+      where: { station_id }
+    });
+
+    // 2. Completed bookings
+    const completedBookings = await Booking.count({
+      where: {
+        station_id,
+        status: 'completed'
+      }
+    });
+
+    // 3. Total revenue (from successful payments for this station)
+    const revenueResult = await sequelize.query(`
+      SELECT COALESCE(SUM(p.amount), 0) as total_revenue
+      FROM payments p
+      INNER JOIN bookings b ON p.booking_id = b.booking_id
+      WHERE b.station_id = :station_id
+      AND p.status = 'success'
+    `, {
+      replacements: { station_id },
+      type: sequelize.QueryTypes.SELECT
+    });
+    const totalRevenue = parseFloat(revenueResult[0]?.total_revenue || 0);
+
+    // 4. Total KWH supplied (from charging sessions for this station)
+    const kwhResult = await sequelize.query(`
+      SELECT COALESCE(SUM(cs.energy_consumed), 0) as total_kwh
+      FROM charging_sessions cs
+      INNER JOIN bookings b ON cs.booking_id = b.booking_id
+      WHERE b.station_id = :station_id
+      AND cs.energy_consumed IS NOT NULL
+    `, {
+      replacements: { station_id },
+      type: sequelize.QueryTypes.SELECT
+    });
+    const totalKwh = parseFloat(kwhResult[0]?.total_kwh || 0);
+
     const stationData = station.toJSON();
     const formattedStation = {
       ...stationData,
       manager_name: stationData.manager?.full_name || null,
-      manager_email: stationData.manager?.email || null
+      manager_email: stationData.manager?.email || null,
+      // Statistics
+      statistics: {
+        total_bookings: totalBookings,
+        completed_bookings: completedBookings,
+        total_revenue: totalRevenue,
+        total_kwh_supplied: totalKwh
+      }
     };
 
     res.status(200).json({
@@ -268,6 +317,7 @@ exports.updateStation = async (req, res, next) => {
     }
 
     // Build update object
+    // Các trường có dấu * trong UI là required, phải có giá trị
     const updateData = {
       station_name,
       address,
@@ -275,8 +325,8 @@ exports.updateStation = async (req, res, next) => {
       longitude: longitude !== undefined ? longitude : station.longitude,
       price_per_kwh,
       station_type,
+      connector_types, // Required trong UI
       charging_power: charging_power !== undefined ? charging_power : station.charging_power,
-      connector_types: connector_types !== undefined ? connector_types : station.connector_types,
       opening_hours: opening_hours !== undefined ? opening_hours : station.opening_hours,
       status: status !== undefined ? status : station.status,
       manager_id: manager_id !== undefined ? manager_id : station.manager_id
@@ -288,6 +338,9 @@ exports.updateStation = async (req, res, next) => {
       updateData.total_slots = total_slots;
       // Adjust available_slots by the difference
       updateData.available_slots = Math.max(0, station.available_slots + difference);
+    } else {
+      // Nếu total_slots không thay đổi, vẫn cần set nó
+      updateData.total_slots = total_slots !== undefined ? total_slots : station.total_slots;
     }
 
     // Update station
