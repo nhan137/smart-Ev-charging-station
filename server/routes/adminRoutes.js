@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminDashboardController = require('../controllers/adminDashboardController');
+const adminNotificationController = require('../controllers/adminNotificationController');
 const adminUserController = require('../controllers/adminUserController');
 const adminStationController = require('../controllers/adminStationController');
 const adminBookingController = require('../controllers/adminBookingController');
@@ -32,6 +33,13 @@ router.get('/dashboard/charts/station-types', authenticate, authorize('admin'), 
 
 // GET /api/admin/dashboard/recent-activities - Get recent activities
 router.get('/dashboard/recent-activities', authenticate, authorize('admin'), adminDashboardController.getRecentActivities);
+
+// Notification Routes
+// POST /api/admin/notifications - Send notification
+router.post('/notifications', authenticate, authorize('admin'), adminNotificationController.sendNotification);
+
+// GET /api/admin/notifications/history - Get notification history
+router.get('/notifications/history', authenticate, authorize('admin'), adminNotificationController.getHistory);
 
 // User Management Routes
 // GET /api/admin/users/stats - Get user statistics
