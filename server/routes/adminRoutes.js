@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminUserController = require('../controllers/adminUserController');
 const adminStationController = require('../controllers/adminStationController');
+const adminBookingController = require('../controllers/adminBookingController');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validateUser, validateAdminUserUpdate, validateUserStatus, validateStation, validateStationUpdate } = require('../middleware/validation');
 
@@ -51,6 +52,19 @@ router.put('/stations/:station_id', authenticate, authorize('admin'), validateSt
 
 // DELETE /api/admin/stations/:station_id - Delete station
 router.delete('/stations/:station_id', authenticate, authorize('admin'), adminStationController.deleteStation);
+
+// Booking Management Routes
+// GET /api/admin/bookings/stats - Get booking statistics
+router.get('/bookings/stats', authenticate, authorize('admin'), adminBookingController.getBookingStats);
+
+// GET /api/admin/bookings - Get all bookings with filters
+router.get('/bookings', authenticate, authorize('admin'), adminBookingController.getBookings);
+
+// GET /api/admin/bookings/:booking_id - Get booking by ID
+router.get('/bookings/:booking_id', authenticate, authorize('admin'), adminBookingController.getBookingById);
+
+// PUT /api/admin/bookings/:booking_id/cancel - Cancel booking
+router.put('/bookings/:booking_id/cancel', authenticate, authorize('admin'), adminBookingController.cancelBooking);
 
 module.exports = router;
 
