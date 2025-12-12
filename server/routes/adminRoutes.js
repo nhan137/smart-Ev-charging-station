@@ -3,6 +3,7 @@ const router = express.Router();
 const adminUserController = require('../controllers/adminUserController');
 const adminStationController = require('../controllers/adminStationController');
 const adminBookingController = require('../controllers/adminBookingController');
+const adminPaymentController = require('../controllers/adminPaymentController');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validateUser, validateAdminUserUpdate, validateUserStatus, validateStation, validateStationUpdate } = require('../middleware/validation');
 
@@ -65,6 +66,19 @@ router.get('/bookings/:booking_id', authenticate, authorize('admin'), adminBooki
 
 // PUT /api/admin/bookings/:booking_id/cancel - Cancel booking
 router.put('/bookings/:booking_id/cancel', authenticate, authorize('admin'), adminBookingController.cancelBooking);
+
+// Payment Management Routes
+// GET /api/admin/payments/stats - Get payment statistics
+router.get('/payments/stats', authenticate, authorize('admin'), adminPaymentController.getPaymentStats);
+
+// GET /api/admin/payments - Get all payments with filters
+router.get('/payments', authenticate, authorize('admin'), adminPaymentController.getPayments);
+
+// GET /api/admin/payments/export - Export payments to CSV/Excel (MUST be before /:payment_id)
+router.get('/payments/export', authenticate, authorize('admin'), adminPaymentController.exportPayments);
+
+// GET /api/admin/payments/:payment_id - Get payment by ID
+router.get('/payments/:payment_id', authenticate, authorize('admin'), adminPaymentController.getPaymentById);
 
 module.exports = router;
 

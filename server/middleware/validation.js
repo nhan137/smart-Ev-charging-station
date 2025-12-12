@@ -300,6 +300,15 @@ exports.validateStation = [
  * Validation middleware for station update
  * Các trường có dấu * trong UI là required
  */
+/**
+ * Validation middleware for payment status update
+ */
+exports.validatePaymentStatus = [
+  body('status')
+    .notEmpty().withMessage('Status is required')
+    .isIn(['success', 'failed']).withMessage('Status must be either "success" or "failed"')
+];
+
 exports.validateStationUpdate = [
   body('station_name')
     .trim()

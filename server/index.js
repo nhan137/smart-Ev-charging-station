@@ -21,6 +21,10 @@ ChargingSession.belongsTo(Booking, { foreignKey: 'booking_id', as: 'booking' });
 Booking.hasOne(Payment, { foreignKey: 'booking_id', as: 'payment' });
 Payment.belongsTo(Booking, { foreignKey: 'booking_id', as: 'booking' });
 
+// Payment and User associations
+Payment.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(Payment, { foreignKey: 'user_id', as: 'payments' });
+
 // Booking and User associations
 Booking.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.hasMany(Booking, { foreignKey: 'user_id', as: 'bookings' });
