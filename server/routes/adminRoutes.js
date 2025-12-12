@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const adminDashboardController = require('../controllers/adminDashboardController');
 const adminUserController = require('../controllers/adminUserController');
 const adminStationController = require('../controllers/adminStationController');
 const adminBookingController = require('../controllers/adminBookingController');
@@ -12,6 +13,25 @@ const { validateUser, validateAdminUserUpdate, validateUserStatus, validateStati
  * Base path: /api/admin
  * All routes require Admin authentication (role_id = 3)
  */
+
+// Dashboard Routes
+// GET /api/admin/dashboard/overview - Get overview statistics
+router.get('/dashboard/overview', authenticate, authorize('admin'), adminDashboardController.getOverview);
+
+// GET /api/admin/dashboard/highlights - Get highlight statistics
+router.get('/dashboard/highlights', authenticate, authorize('admin'), adminDashboardController.getHighlights);
+
+// GET /api/admin/dashboard/charts/revenue - Get revenue chart data
+router.get('/dashboard/charts/revenue', authenticate, authorize('admin'), adminDashboardController.getRevenueChart);
+
+// GET /api/admin/dashboard/charts/booking-trend - Get booking trend chart data
+router.get('/dashboard/charts/booking-trend', authenticate, authorize('admin'), adminDashboardController.getBookingTrendChart);
+
+// GET /api/admin/dashboard/charts/station-types - Get station types chart data
+router.get('/dashboard/charts/station-types', authenticate, authorize('admin'), adminDashboardController.getStationTypesChart);
+
+// GET /api/admin/dashboard/recent-activities - Get recent activities
+router.get('/dashboard/recent-activities', authenticate, authorize('admin'), adminDashboardController.getRecentActivities);
 
 // User Management Routes
 // GET /api/admin/users/stats - Get user statistics
