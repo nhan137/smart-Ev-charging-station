@@ -80,7 +80,8 @@ const Dashboard = () => {
   const recentBookings = [
     { id: 1, customer: 'Nguyễn Văn A', station: 'Trạm sạc Hải Châu', time: '14:00', status: 'confirmed' },
     { id: 2, customer: 'Trần Thị B', station: 'Trạm sạc Sơn Trà', time: '15:30', status: 'pending' },
-    { id: 3, customer: 'Lê Văn C', station: 'Trạm sạc Hải Châu', time: '16:00', status: 'completed' }
+    { id: 3, customer: 'Lê Văn C', station: 'Trạm sạc Hải Châu', time: '16:00', status: 'completed' },
+    { id: 4, customer: 'Lê Văn C', station: 'Trạm sạc Hải Châu31312313131313131313131313131', time: '20:00', status: 'completed' }
   ];
 
   const getStatusBadge = (status: string) => {
