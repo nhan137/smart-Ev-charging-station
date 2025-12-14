@@ -7,6 +7,11 @@ const Payment = require('../models/Payment');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 
+// Define Promotion association if not already defined
+if (!Booking.associations.promotion) {
+  Booking.belongsTo(Promotion, { foreignKey: 'promo_id', as: 'promotion' });
+}
+
 // Battery capacity mapping (kWh)
 const BATTERY_CAPACITY = {
   'xe_may_usb': 5,
@@ -275,12 +280,12 @@ exports.getMyBookings = async (req, res, next) => {
         duration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
       }
 
-      // Format battery range
+      // Format battery range (format: "20% - 80%" để match UI)
       let batteryRange = null;
       if (chargingSession) {
         const startBattery = chargingSession.start_battery_percent || 0;
         const endBattery = chargingSession.end_battery_percent || startBattery;
-        batteryRange = `${startBattery}% → ${endBattery}%`;
+        batteryRange = `${startBattery}% - ${endBattery}%`;
       }
 
       // Get total cost (prefer actual_cost, fallback to booking.total_cost)
@@ -360,6 +365,151 @@ exports.getMyBookings = async (req, res, next) => {
       success: true,
       data: formattedBookings,
       count: formattedBookings.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get booking detail by ID (for user)
+ * GET /api/bookings/:booking_id
+ * 
+ * Mục đích: Lấy chi tiết booking để hiển thị modal "Chi tiết đặt lịch"
+ */
+exports.getBookingById = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+    const { booking_id } = req.params;
+
+    const booking = await Booking.findOne({
+      where: {
+        booking_id: parseInt(booking_id),
+        user_id: userId // Chỉ lấy booking của chính user đó
+      },
+      include: [
+        {
+          model: Station,
+          as: 'station',
+          attributes: ['station_id', 'station_name', 'address'],
+          required: true
+        },
+        {
+          model: ChargingSession,
+          as: 'chargingSession',
+          required: false,
+          attributes: ['start_battery_percent', 'end_battery_percent', 'energy_consumed', 'actual_cost', 'started_at', 'ended_at']
+        },
+        {
+          model: Payment,
+          as: 'payment',
+          required: false,
+          attributes: ['payment_id', 'method', 'status', 'amount', 'payment_date']
+        },
+        {
+          model: Promotion,
+          as: 'promotion',
+          required: false,
+          attributes: ['promo_id', 'code', 'title', 'discount_percent']
+        }
+      ]
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found or you do not have permission to view this booking'
+      });
+    }
+
+    const bookingData = booking.toJSON();
+    const station = bookingData.station;
+    const chargingSession = bookingData.chargingSession;
+    const payment = bookingData.payment;
+    const promotion = bookingData.promotion;
+
+    // Calculate duration
+    let duration = null;
+    if (bookingData.actual_start && bookingData.actual_end) {
+      const start = new Date(bookingData.actual_start);
+      const end = new Date(bookingData.actual_end);
+      const diffMinutes = Math.floor((end - start) / (1000 * 60));
+      const hours = Math.floor(diffMinutes / 60);
+      const minutes = diffMinutes % 60;
+      duration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    }
+
+    // Format vehicle type
+    const vehicleTypeMap = {
+      'xe_may_usb': 'Xe máy USB',
+      'xe_may_ccs': 'Xe máy CCS',
+      'oto_ccs': 'Ô tô CCS'
+    };
+    const vehicleTypeDisplay = vehicleTypeMap[bookingData.vehicle_type] || bookingData.vehicle_type;
+
+    // Format payment method
+    const paymentMethodDisplay = payment?.method ? payment.method.toUpperCase() : null;
+
+    // Format payment status
+    const paymentStatusMap = {
+      'success': 'Thành công',
+      'pending': 'Đang xử lý',
+      'failed': 'Thất bại'
+    };
+    const paymentStatusDisplay = payment?.status ? paymentStatusMap[payment.status] || payment.status : null;
+
+    // Format dates
+    const formatDateTime = (date) => {
+      if (!date) return null;
+      const d = new Date(date);
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+    };
+
+    // Get total cost (prefer actual_cost, fallback to booking.total_cost)
+    const totalCost = chargingSession?.actual_cost 
+      ? parseFloat(chargingSession.actual_cost) 
+      : (bookingData.total_cost ? parseFloat(bookingData.total_cost) : null);
+
+    // Format response to match UI modal
+    const formattedResponse = {
+      // Thông tin trạm
+      station_info: {
+        station_name: station?.station_name || null,
+        vehicle_type: vehicleTypeDisplay
+      },
+      // Thời gian sạc
+      charging_time: {
+        start: formatDateTime(bookingData.actual_start || bookingData.start_time),
+        end: formatDateTime(bookingData.actual_end || bookingData.end_time),
+        duration: duration
+      },
+      // Năng lượng
+      energy_info: {
+        start_battery: chargingSession?.start_battery_percent || null,
+        end_battery: chargingSession?.end_battery_percent || null,
+        energy_consumed: chargingSession?.energy_consumed 
+          ? parseFloat(chargingSession.energy_consumed) 
+          : null
+      },
+      // Thanh toán
+      payment_info: {
+        method: paymentMethodDisplay,
+        status: paymentStatusDisplay,
+        status_raw: payment?.status || null,
+        discount_code: promotion?.code || null,
+        total_amount: totalCost
+      }
+    };
+
+    res.status(200).json({
+      success: true,
+      data: formattedResponse
     });
   } catch (error) {
     next(error);

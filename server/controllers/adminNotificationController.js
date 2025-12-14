@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const User = require('../models/User');
 const { sequelize } = require('../config/database');
 
 const ALLOWED_TYPES = ['system', 'payment', 'promotion', 'booking'];
@@ -6,6 +7,8 @@ const ALLOWED_TYPES = ['system', 'payment', 'promotion', 'booking'];
 /**
  * POST /api/admin/notifications
  * Body: { title, message, type, send_to: 'all' | 'selected', user_ids?: number[] }
+ * 
+ * Lưu ý: Chỉ gửi thông báo cho User (role_id = 1), không gửi cho Manager (role_id = 2) hoặc Admin (role_id = 3)
  */
 exports.sendNotification = async (req, res, next) => {
   try {
@@ -21,7 +24,7 @@ exports.sendNotification = async (req, res, next) => {
 
     const now = new Date();
 
-    // send_to = all -> user_id null
+    // send_to = all -> user_id null (gửi cho tất cả user role_id = 1 và manager role_id = 2)
     if (send_to === 'all') {
       await Notification.create({
         user_id: null,
@@ -34,7 +37,34 @@ exports.sendNotification = async (req, res, next) => {
       if (!Array.isArray(user_ids) || user_ids.length === 0) {
         return res.status(400).json({ success: false, message: 'user_ids required when send_to = selected' });
       }
-      const rows = user_ids.map(id => ({
+
+      // Validate: Chỉ cho phép gửi cho User (role_id = 1) và Manager (role_id = 2)
+      const users = await User.findAll({
+        where: {
+          user_id: user_ids,
+          role_id: [1, 2] // Cho phép gửi cho User và Manager
+        },
+        attributes: ['user_id']
+      });
+
+      const validUserIds = users.map(u => u.user_id);
+      const invalidUserIds = user_ids.filter(id => !validUserIds.includes(id));
+
+      if (invalidUserIds.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot send notification to Admin users. Invalid user_ids: ${invalidUserIds.join(', ')}`
+        });
+      }
+
+      if (validUserIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No valid users found. Only users with role_id = 1 (User) or role_id = 2 (Manager) can receive notifications.'
+        });
+      }
+
+      const rows = validUserIds.map(id => ({
         user_id: id,
         title,
         message,

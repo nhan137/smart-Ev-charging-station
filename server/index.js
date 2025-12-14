@@ -13,6 +13,7 @@ const ChargingSession = require('./models/ChargingSession');
 const Payment = require('./models/Payment');
 const Station = require('./models/Station');
 const User = require('./models/User');
+const Promotion = require('./models/Promotion');
 
 // Define associations after all models are loaded
 Booking.hasOne(ChargingSession, { foreignKey: 'booking_id', as: 'chargingSession' });
@@ -33,6 +34,10 @@ User.hasMany(Booking, { foreignKey: 'user_id', as: 'bookings' });
 Station.belongsTo(User, { foreignKey: 'manager_id', as: 'manager' });
 User.hasMany(Station, { foreignKey: 'manager_id', as: 'managedStations' });
 
+// Booking and Promotion associations
+Booking.belongsTo(Promotion, { foreignKey: 'promo_id', as: 'promotion' });
+Promotion.hasMany(Booking, { foreignKey: 'promo_id', as: 'bookings' });
+
 // Import routes
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
@@ -41,6 +46,7 @@ const bookingRoutes = require('./routes/bookingRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const favoriteRoutes = require('./routes/favoriteRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 
 // Initialize Express app and HTTP server
@@ -102,6 +108,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/feedbacks', feedbackRoutes);
 app.use('/api/favorites', favoriteRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Internal API Routes (for IoT simulator)
