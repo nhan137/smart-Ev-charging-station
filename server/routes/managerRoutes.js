@@ -2,14 +2,24 @@ const express = require('express');
 const router = express.Router();
 const managerStationController = require('../controllers/managerStationController');
 const managerBookingController = require('../controllers/managerBookingController');
-const { authenticate } = require('../middleware/auth');
-const { authorize } = require('../middleware/auth');
+const managerDashboardController = require('../controllers/managerDashboardController');
+const { authenticate, authorize } = require('../middleware/auth');
 
 /**
  * Manager Routes
  * Base path: /api/manager
  * All routes require authentication and manager role
  */
+
+// ========== Dashboard API ==========
+
+// GET /api/manager/dashboard - Manager overview stats
+router.get(
+  '/dashboard',
+  authenticate,
+  authorize('manager'),
+  managerDashboardController.getDashboardOverview
+);
 
 // ========== Station Management APIs ==========
 
