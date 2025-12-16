@@ -25,5 +25,15 @@ router.get('/:booking_id', authenticate, bookingController.getBookingById);
 // POST /api/bookings/:booking_id/charging/complete - Complete charging manually (protected)
 router.post('/:booking_id/charging/complete', authenticate, chargingController.completeCharging);
 
+// Manager-only routes (require manager role)
+const managerBookingController = require('../controllers/managerBookingController');
+const { authorize } = require('../middleware/auth');
+
+// PUT /api/bookings/:booking_id/confirm - Confirm booking (generate check-in code) - Manager only
+router.put('/:booking_id/confirm', authenticate, authorize('manager'), managerBookingController.confirmBooking);
+
+// PUT /api/bookings/:booking_id/cancel - Cancel booking - Manager only
+router.put('/:booking_id/cancel', authenticate, authorize('manager'), managerBookingController.cancelBooking);
+
 module.exports = router;
 

@@ -50,6 +50,11 @@ const Booking = sequelize.define('bookings', {
     allowNull: false,
     defaultValue: 'pending'
   },
+  checkin_code: {
+    type: DataTypes.STRING(6),
+    allowNull: true,
+    comment: 'Mã check-in 6 ký tự (Uppercase Letters + Numbers)'
+  },
   total_cost: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: true

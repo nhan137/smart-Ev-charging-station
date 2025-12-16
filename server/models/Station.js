@@ -1,6 +1,5 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
-const Feedback = require('./Feedback');
 
 /**
  * Station Model
@@ -127,17 +126,6 @@ const Station = sequelize.define('stations', {
 }, {
   tableName: 'stations',
   timestamps: false
-});
-
-// Define associations
-Station.hasMany(Feedback, {
-  foreignKey: 'station_id',
-  as: 'feedbacks'
-});
-
-Feedback.belongsTo(Station, {
-  foreignKey: 'station_id',
-  as: 'station'
 });
 
 module.exports = Station;

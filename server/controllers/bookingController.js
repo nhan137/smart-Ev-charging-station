@@ -164,10 +164,14 @@ exports.createBooking = async (req, res, next) => {
       status: 'pending'
     }, { transaction });
 
-    // 6. Update station available_slots
-    await station.update({
-      available_slots: station.available_slots - 1
-    }, { transaction });
+    // 6. Update station available_slots (atomic update to prevent race condition)
+    await Station.update(
+      { available_slots: sequelize.literal('available_slots - 1') },
+      { 
+        where: { station_id: station_id },
+        transaction 
+      }
+    );
 
     // 7. Create notification
     await Notification.create({
