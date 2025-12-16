@@ -15,6 +15,7 @@ const Station = require('./models/Station');
 const User = require('./models/User');
 const Promotion = require('./models/Promotion');
 const Feedback = require('./models/Feedback');
+const reportRoutes = require('./routes/reportRoutes');
 
 // Define associations after all models are loaded
 Booking.hasOne(ChargingSession, { foreignKey: 'booking_id', as: 'chargingSession' });
@@ -119,6 +120,7 @@ app.use('/api/favorites', favoriteRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/manager', managerRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Internal API Routes (for IoT simulator)
 const chargingController = require('./controllers/chargingController');
