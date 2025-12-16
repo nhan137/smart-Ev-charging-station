@@ -13,11 +13,23 @@ const { authenticate } = require('../middleware/auth');
 // POST /api/bookings - Create new booking (protected)
 router.post('/', authenticate, validateBooking, bookingController.createBooking);
 
-// GET /api/bookings/my - Get user's booking history (protected)
+// GET /api/bookings/my - Get user's booking history (for "Lịch sử sạc & thanh toán") (protected)
 router.get('/my', authenticate, bookingController.getMyBookings);
+
+// GET /api/bookings/my-bookings - Get user's booking list (for "Lịch sử đặt lịch") (protected)
+router.get('/my-bookings', authenticate, bookingController.getMyBookingList);
 
 // GET /api/bookings/:booking_id/charging/status - Get charging status (protected) - MUST be before /:booking_id
 router.get('/:booking_id/charging/status', authenticate, chargingController.getChargingStatus);
+
+// POST /api/bookings/:booking_id/verify-checkin - Verify check-in code (protected) - MUST be before /:booking_id
+router.post('/:booking_id/verify-checkin', authenticate, bookingController.verifyCheckinCode);
+
+// PUT /api/bookings/:booking_id/cancel-by-user - Cancel booking by user (protected) - MUST be before /:booking_id
+router.put('/:booking_id/cancel-by-user', authenticate, bookingController.cancelBookingByUser);
+
+// PUT /api/bookings/:booking_id/status - Update booking status (for testing) (protected) - MUST be before /:booking_id
+router.put('/:booking_id/status', authenticate, bookingController.updateBookingStatus);
 
 // GET /api/bookings/:booking_id - Get booking detail by ID (protected)
 router.get('/:booking_id', authenticate, bookingController.getBookingById);

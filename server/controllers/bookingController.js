@@ -4,6 +4,7 @@ const Promotion = require('../models/Promotion');
 const Notification = require('../models/Notification');
 const ChargingSession = require('../models/ChargingSession');
 const Payment = require('../models/Payment');
+const User = require('../models/User');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 
@@ -485,6 +486,7 @@ exports.getBookingById = async (req, res, next) => {
       // Thông tin trạm
       station_info: {
         station_name: station?.station_name || null,
+        address: station?.address || null,
         vehicle_type: vehicleTypeDisplay
       },
       // Thời gian sạc
@@ -516,6 +518,347 @@ exports.getBookingById = async (req, res, next) => {
       data: formattedResponse
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get user's booking list (for "Lịch sử đặt lịch" screen)
+ * GET /api/bookings/my-bookings
+ * 
+ * Khác với getMyBookings: API này dùng cho màn hình "Lịch sử đặt lịch" (Hình 13)
+ * - Hiển thị tất cả bookings (pending, confirmed, completed, cancelled)
+ * - Có checkin_code để user nhập vào modal
+ * - Không cần charging session và payment details
+ */
+exports.getMyBookingList = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+    const { status } = req.query;
+
+    // Build WHERE conditions
+    const whereConditions = {
+      user_id: userId
+    };
+
+    // Apply status filter (nếu có)
+    if (status) {
+      whereConditions.status = status;
+    }
+
+    // Query bookings with station info only
+    const bookings = await Booking.findAll({
+      where: whereConditions,
+      include: [
+        {
+          model: Station,
+          as: 'station',
+          attributes: ['station_name', 'address'],
+          required: true
+        }
+      ],
+      order: [['created_at', 'DESC']]
+    });
+
+    // Format response
+    const formattedBookings = bookings.map(booking => {
+      const station = booking.station;
+
+      // Format vehicle type for display
+      const vehicleTypeMap = {
+        'xe_may_usb': 'Xe máy USB',
+        'xe_may_ccs': 'Xe máy CCS',
+        'oto_ccs': 'Ô tô CCS'
+      };
+      const vehicleTypeDisplay = vehicleTypeMap[booking.vehicle_type] || booking.vehicle_type;
+
+      // Format booking status for display
+      const bookingStatusMap = {
+        'completed': 'Hoàn thành',
+        'charging': 'Đang sạc',
+        'pending': 'Chờ xác nhận',
+        'confirmed': 'Đã xác nhận',
+        'cancelled': 'Đã hủy'
+      };
+      const bookingStatusDisplay = bookingStatusMap[booking.status] || booking.status;
+
+      // Format dates
+      const formatDate = (date) => {
+        if (!date) return null;
+        const d = new Date(date);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+      };
+
+      const formatTime = (date) => {
+        if (!date) return null;
+        const d = new Date(date);
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+
+      return {
+        booking_id: booking.booking_id,
+        station_name: station?.station_name || null,
+        vehicle_type: booking.vehicle_type,
+        vehicle_type_display: vehicleTypeDisplay,
+        booking_date: formatDate(booking.created_at),
+        start_time: formatTime(booking.start_time),
+        end_time: formatTime(booking.end_time),
+        start_time_full: booking.start_time,
+        end_time_full: booking.end_time,
+        total_cost: booking.total_cost ? parseFloat(booking.total_cost) : null,
+        booking_status: booking.status,
+        booking_status_display: bookingStatusDisplay,
+        checkin_code: booking.checkin_code || null, // Có checkin_code để nhập vào modal
+        created_at: booking.created_at
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: formattedBookings,
+      count: formattedBookings.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Verify check-in code for a booking
+ * POST /api/bookings/:booking_id/verify-checkin
+ * 
+ * Flow: User nhập mã check-in → Verify → Nếu đúng → Cho phép bắt đầu sạc
+ */
+exports.verifyCheckinCode = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+    const { booking_id } = req.params;
+    const { checkin_code } = req.body;
+
+    // Validate input
+    if (!checkin_code) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mã check-in là bắt buộc'
+      });
+    }
+
+    // Find booking
+    const booking = await Booking.findOne({
+      where: {
+        booking_id: parseInt(booking_id),
+        user_id: userId // Chỉ user sở hữu booking mới verify được
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch đặt hoặc bạn không có quyền truy cập'
+      });
+    }
+
+    // Check if booking is in correct status
+    if (booking.status !== 'confirmed') {
+      return res.status(400).json({
+        success: false,
+        message: `Lịch đặt này không thể bắt đầu sạc. Trạng thái hiện tại: ${booking.status}`
+      });
+    }
+
+    // Verify check-in code (case-insensitive)
+    if (!booking.checkin_code || booking.checkin_code.toUpperCase() !== checkin_code.toUpperCase().trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mã check-in không đúng. Vui lòng kiểm tra lại.'
+      });
+    }
+
+    // Code is valid - allow charging to start
+    res.status(200).json({
+      success: true,
+      message: 'Mã check-in hợp lệ',
+      data: {
+        booking_id: booking.booking_id,
+        status: booking.status,
+        can_start_charging: true,
+        station_id: booking.station_id
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update booking status (for testing purposes)
+ * PUT /api/bookings/:booking_id/status
+ * 
+ * Flow: Cập nhật status booking để test thanh toán
+ * Body: { "status": "completed" | "charging" }
+ */
+exports.updateBookingStatus = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+    const { booking_id } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    const allowedStatuses = ['pending', 'confirmed', 'charging', 'completed', 'cancelled'];
+    if (!status || !allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Status phải là một trong: ${allowedStatuses.join(', ')}`
+      });
+    }
+
+    // Find booking
+    const booking = await Booking.findOne({
+      where: {
+        booking_id: parseInt(booking_id),
+        user_id: userId // Chỉ user sở hữu booking mới cập nhật được
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch đặt hoặc bạn không có quyền cập nhật'
+      });
+    }
+
+    // Store old status before update
+    const oldStatus = booking.status;
+
+    // Update status
+    await booking.update({
+      status: status
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Cập nhật trạng thái thành công',
+      data: {
+        booking_id: booking.booking_id,
+        old_status: oldStatus,
+        new_status: status
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Cancel booking by user
+ * PUT /api/bookings/:booking_id/cancel-by-user
+ * 
+ * Flow: User nhấn nút "Hủy" → Hủy booking → Restore slots → Notify manager
+ */
+exports.cancelBookingByUser = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const userId = req.user.user_id;
+    const { booking_id } = req.params;
+
+    // Find booking
+    const booking = await Booking.findOne({
+      where: {
+        booking_id: parseInt(booking_id),
+        user_id: userId // Chỉ user sở hữu booking mới hủy được
+      },
+      transaction
+    });
+
+    if (!booking) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch đặt hoặc bạn không có quyền hủy'
+      });
+    }
+
+    // Check if booking can be cancelled
+    if (booking.status === 'cancelled') {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Lịch đặt này đã được hủy trước đó'
+      });
+    }
+
+    if (booking.status === 'completed') {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Không thể hủy lịch đặt đã hoàn thành'
+      });
+    }
+
+    if (booking.status === 'charging') {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Không thể hủy lịch đặt đang trong quá trình sạc'
+      });
+    }
+
+    // Store old status for slot restoration
+    const oldStatus = booking.status;
+
+    // Update booking status
+    await booking.update({
+      status: 'cancelled'
+    }, { transaction });
+
+    // Restore available_slots if booking was pending or confirmed
+    if (oldStatus === 'pending' || oldStatus === 'confirmed') {
+      await Station.update(
+        {
+          available_slots: sequelize.literal(`
+            CASE 
+              WHEN available_slots < total_slots 
+              THEN available_slots + 1 
+              ELSE total_slots 
+            END
+          `)
+        },
+        {
+          where: { station_id: booking.station_id },
+          transaction
+        }
+      );
+    }
+
+    // Get station and manager info for notification
+    const station = await Station.findByPk(booking.station_id, { transaction });
+    const user = await User.findByPk(userId, { transaction });
+
+    // Notify manager (if station has manager)
+    if (station && station.manager_id) {
+      await Notification.create({
+        user_id: station.manager_id,
+        title: 'Lịch đặt đã bị hủy',
+        message: `Người dùng ${user?.full_name || 'N/A'} đã hủy lịch đặt #${booking.booking_id} tại trạm ${station.station_name}.`,
+        type: 'system',
+        status: 'unread'
+      }, { transaction });
+    }
+
+    await transaction.commit();
+
+    res.status(200).json({
+      success: true,
+      message: 'Đã hủy lịch đặt sạc thành công'
+    });
+  } catch (error) {
+    await transaction.rollback();
     next(error);
   }
 };

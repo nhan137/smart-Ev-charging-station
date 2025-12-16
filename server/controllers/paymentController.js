@@ -14,6 +14,13 @@ exports.vnpayInit = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
   try {
+    // Debug: Log VNPay config (tạm thời để test)
+    console.log('VNPay Config:', {
+      tmnCode: process.env.VNPAY_TMN_CODE,
+      hasSecret: !!process.env.VNPAY_SECRET_KEY,
+      secretLength: process.env.VNPAY_SECRET_KEY?.length
+    });
+    
     const { booking_id } = req.body;
     const user_id = req.user.user_id;
 
@@ -124,7 +131,7 @@ exports.vnpayInit = async (req, res, next) => {
       vnp_OrderType: 'other',
       vnp_Locale: 'vn',
       vnp_ReturnUrl: vnp_ReturnUrl,
-      vnp_IpAddr: req.ip || req.connection.remoteAddress || '127.0.0.1',
+      vnp_IpAddr: req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || '127.0.0.1',
       vnp_CreateDate: new Date().toISOString().replace(/[-:T]/g, '').substring(0, 14) // YYYYMMDDHHmmss
     };
 
@@ -246,11 +253,10 @@ exports.vnpayCallback = async (req, res, next) => {
         });
       }
 
-      // Return success response (VNPay expects specific format)
-      return res.status(200).json({
-        RspCode: '00',
-        Message: 'Success'
-      });
+      // Redirect to Frontend success page (Option B)
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const redirectUrl = `${frontendUrl}/payment/success?booking_id=${booking_id}&status=success`;
+      return res.redirect(redirectUrl);
     } else {
       // Payment failed
       await payment.update({
@@ -269,7 +275,7 @@ exports.vnpayCallback = async (req, res, next) => {
         });
       }
 
-      // Return error response
+      // Error messages mapping
       const errorMessages = {
         '07': 'Trừ tiền thành công. Giao dịch bị nghi ngờ (liên quan tới lừa đảo, giao dịch bất thường).',
         '09': 'Thẻ/Tài khoản chưa đăng ký dịch vụ InternetBanking',
@@ -285,14 +291,13 @@ exports.vnpayCallback = async (req, res, next) => {
 
       const errorMessage = errorMessages[vnp_ResponseCode] || `Lỗi thanh toán. Mã lỗi: ${vnp_ResponseCode}`;
 
-      return res.status(200).json({
-        RspCode: vnp_ResponseCode,
-        Message: errorMessage
-      });
+      // Redirect to Frontend error page (Option B)
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const redirectUrl = `${frontendUrl}/payment/failed?booking_id=${booking_id}&error_code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`;
+      return res.redirect(redirectUrl);
     }
   } catch (error) {
     console.error('[VNPay] Callback error:', error);
     next(error);
   }
 };
-

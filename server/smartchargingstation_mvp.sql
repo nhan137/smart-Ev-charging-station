@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Máy chủ: 127.0.0.1
--- Thời gian đã tạo: Th12 14, 2025 lúc 04:54 PM
+-- Thời gian đã tạo: Th12 16, 2025 lúc 07:23 AM
 -- Phiên bản máy phục vụ: 10.4.32-MariaDB
 -- Phiên bản PHP: 8.0.30
 
@@ -253,11 +253,11 @@ CREATE TABLE `stations` (
 --
 
 INSERT INTO `stations` (`station_id`, `station_name`, `address`, `latitude`, `longitude`, `price_per_kwh`, `station_type`, `total_slots`, `available_slots`, `charging_power`, `connector_types`, `opening_hours`, `avatar_url`, `contact_phone`, `status`, `manager_id`, `created_at`) VALUES
-(1, 'Trạm Sạc Cầu Rồng', '123 Trần Phú, Hải Châu, Đà Nẵng - Gần Cầu Rồng và Bãi biển Mỹ Khê', 16.061400, 108.226700, 3500.00, 'ca_hai', 6, 2, 50.00, 'Type 2, CCS2, CHAdeMO', '24/7', 'https://picsum.photos/400/300?random=1', '0901234567', 'active', NULL, '2025-12-07 22:49:13'),
-(2, 'Trạm Sạc Sơn Trà Premium', '456 Võ Nguyên Giáp, Sơn Trà, Đà Nẵng - Khu vực Bán đảo Sơn Trà', 16.100000, 108.250000, 3200.00, 'oto', 8, 5, 100.00, 'Type 2, CCS2', '24/7', 'https://picsum.photos/400/300?random=2', '0901234568', 'active', NULL, '2025-12-07 22:49:13'),
-(3, 'Trạm Sạc Ngũ Hành Sơn', '789 Nguyễn Tất Thành, Ngũ Hành Sơn, Đà Nẵng - Gần Chùa Linh Ứng', 16.000000, 108.250000, 3000.00, 'ca_hai', 10, 8, 60.00, 'Type 2, CCS2, CHAdeMO, GB/T', '06:00-22:00', 'https://picsum.photos/400/300?random=3', '0901234569', 'active', NULL, '2025-12-07 22:49:13'),
-(4, 'Trạm Sạc Thanh Khê Express', '321 Điện Biên Phủ, Thanh Khê, Đà Nẵng - Trung tâm thương mại', 16.054400, 108.202200, 3300.00, 'xe_may', 5, 2, 20.00, 'Type 2, Schuko', '24/7', 'https://picsum.photos/400/300?random=4', '0901234570', 'active', NULL, '2025-12-07 22:49:13'),
-(5, 'Trạm sạc Hải Châu Updated', '123 Trần Phú Updated, Đà Nẵng', 16.050000, 108.230000, 4000.00, 'oto', 8, 4, 5.00, 'CCS2, CHAdeMO', '6:00 - 22:00', 'https://picsum.photos/400/300?random=5', '0901234571', 'active', 3, '2025-12-07 22:49:13');
+(1, 'Trạm Sạc Cầu Rồng', '123 Trần Phú, Hải Châu, Đà Nẵng - Gần Cầu Rồng và Bãi biển Mỹ Khê', 16.061400, 108.226700, 3500.00, 'ca_hai', 6, 2, 50.00, 'Type 2, CCS2, CHAdeMO', '24/7', 'https://picsum.photos/400/300?random=1', '0901234567', 'active', 21, '2025-12-07 22:49:13'),
+(2, 'Trạm Sạc Sơn Trà Premium', '456 Võ Nguyên Giáp, Sơn Trà, Đà Nẵng - Khu vực Bán đảo Sơn Trà', 16.100000, 108.250000, 3200.00, 'oto', 8, 5, 100.00, 'Type 2, CCS2', '24/7', 'https://picsum.photos/400/300?random=2', '0901234568', 'active', 21, '2025-12-07 22:49:13'),
+(3, 'Trạm Sạc Ngũ Hành Sơn', '789 Nguyễn Tất Thành, Ngũ Hành Sơn, Đà Nẵng - Gần Chùa Linh Ứng', 16.000000, 108.250000, 3000.00, 'ca_hai', 10, 8, 60.00, 'Type 2, CCS2, CHAdeMO, GB/T', '06:00-22:00', 'https://picsum.photos/400/300?random=3', '0901234569', 'active', 21, '2025-12-07 22:49:13'),
+(4, 'Trạm Sạc Thanh Khê Express', '321 Điện Biên Phủ, Thanh Khê, Đà Nẵng - Trung tâm thương mại', 16.054400, 108.202200, 3300.00, 'xe_may', 5, 2, 20.00, 'Type 2, Schuko', '24/7', 'https://picsum.photos/400/300?random=4', '0901234570', 'active', 21, '2025-12-07 22:49:13'),
+(5, 'Trạm sạc Hải Châu Updated', '123 Trần Phú Updated, Đà Nẵng', 16.050000, 108.230000, 4000.00, 'oto', 8, 4, 5.00, 'CCS2, CHAdeMO', '6:00 - 22:00', 'https://picsum.photos/400/300?random=5', '0901234571', 'active', 21, '2025-12-07 22:49:13');
 
 -- --------------------------------------------------------
 
@@ -297,7 +297,10 @@ INSERT INTO `users` (`user_id`, `full_name`, `email`, `password`, `phone`, `role
 (14, 'Nguyễn Thị Locked', 'nguyenthilocked@gmail.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '0900000000', 1, 'locked', '2025-12-06 23:31:36', NULL, NULL),
 (15, 'Trần Văn NoPhone', 'tranvanophone@gmail.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', NULL, 1, 'active', '2025-12-11 23:31:36', NULL, NULL),
 (18, 'Nguyễn Văn Admin', 'admin@example.com', '$2a$10$n12E0OopjV2d/IUrMYKfJuRfZ7VBwyo5Mh2DcKjdcN8nQ2cOvpTtG', '0901234567', 3, 'active', '2025-12-11 16:50:13', NULL, NULL),
-(19, 'Nguyễn Văn Test', 'testuser_new@example.com', '$2a$10$P/enBozhgpLvtaHbS4T4eOKBXKwLEDwJHR/vQBdsOxM222b3ngcBy', '0909999997', 1, 'active', '2025-12-11 16:59:47', NULL, NULL);
+(19, 'Nguyễn Văn Test', 'testuser_new@example.com', '$2a$10$P/enBozhgpLvtaHbS4T4eOKBXKwLEDwJHR/vQBdsOxM222b3ngcBy', '0909999997', 1, 'active', '2025-12-11 16:59:47', NULL, NULL),
+(20, 'Manager Postman', 'manager_D.nhan@gmail.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '0909123456', 2, 'active', '2025-12-15 18:05:19', NULL, NULL),
+(21, 'Manager Panel Test', 'manager_panel@example.com', '$2a$10$GeWUcSMeSIxt1q1Xzn9Dw..v1ns3Q5M60Y6HOa0wZJlZyVKqQXmBy', '0900000000', 2, 'active', '2025-12-15 18:11:57', NULL, NULL),
+(22, 'Manager Demo', 'manager_demo@example.com', '$2a$10$GeWUcSMeSIxt1q1Xzn9Dw..v1ns3Q5M60Y6HOa0wZJlZyVKqQXmBy', '0900000000', 2, 'active', '2025-12-15 18:59:15', NULL, NULL);
 
 --
 -- Chỉ mục cho các bảng đã đổ
@@ -459,7 +462,7 @@ ALTER TABLE `stations`
 -- AUTO_INCREMENT cho bảng `users`
 --
 ALTER TABLE `users`
-  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID người dùng', AUTO_INCREMENT=20;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID người dùng', AUTO_INCREMENT=23;
 
 --
 -- Các ràng buộc cho các bảng đã đổ
