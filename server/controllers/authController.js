@@ -285,6 +285,27 @@ exports.getMe = async (req, res, next) => {
 };
 
 /**
+ * Logout user (all roles)
+ * POST /api/auth/logout
+ *
+ * Lưu ý:
+ * - Hệ thống dùng JWT stateless, nên backend không giữ session.
+ * - Logout thực tế = FE xoá token (localStorage/cookies) + chuyển về màn hình login.
+ * - Endpoint này chỉ để FE gọi cho đúng flow và hiển thị thông báo thành công.
+ */
+exports.logout = async (req, res, next) => {
+  try {
+    // Nếu cần triển khai blacklist token trong tương lai, có thể thêm logic tại đây.
+    res.status(200).json({
+      success: true,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Forgot password - Send reset token to email
  * POST /api/auth/forgot-password
  */

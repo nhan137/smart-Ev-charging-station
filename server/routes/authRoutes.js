@@ -24,6 +24,10 @@ router.post('/admin/login', validateLogin, authController.adminLogin);
 // GET /api/auth/me - Get current user (protected)
 router.get('/me', authenticate, authController.getMe);
 
+// POST /api/auth/logout - Logout (áp dụng cho cả User / Manager / Admin)
+// FE chỉ cần xoá token sau khi nhận response success.
+router.post('/logout', authenticate, authController.logout);
+
 // POST /api/auth/forgot-password - Request password reset
 router.post('/forgot-password', validateForgotPassword, authController.forgotPassword);
 
