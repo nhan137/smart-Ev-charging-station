@@ -1,20 +1,34 @@
 const crypto = require('crypto');
-const querystring = require('querystring');
+const qs = require('qs');
 
 /**
  * VNPay Integration Utilities
  * Handles VNPay payment URL generation and hash verification
+ * Based on official VNPay NodeJS example code
  */
 
 /**
- * Sort object by key (for VNPay hash calculation)
+ * Sort object by key (VNPay official format)
+ * Encode both keys and values, replace %20 with + for values
  */
 function sortObject(obj) {
   const sorted = {};
-  const keys = Object.keys(obj).sort();
-  keys.forEach(key => {
-    sorted[key] = obj[key];
-  });
+  const str = [];
+  let key;
+  
+  for (key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      str.push(encodeURIComponent(key));
+    }
+  }
+  
+  str.sort();
+  
+  for (key = 0; key < str.length; key++) {
+    const decodedKey = decodeURIComponent(str[key]);
+    sorted[str[key]] = encodeURIComponent(obj[decodedKey]).replace(/%20/g, '+');
+  }
+  
   return sorted;
 }
 
@@ -29,31 +43,29 @@ function createPaymentUrl(params, secretKey, vnpUrl) {
   // Trim secret key to remove any whitespace
   const trimmedSecretKey = secretKey.trim();
   
-  // Remove empty values and sort parameters by key
+  // Remove empty values and convert to strings
   const cleanParams = {};
   Object.keys(params).forEach(key => {
     if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
       cleanParams[key] = String(params[key]);
     }
   });
+  
+  // Sort parameters using VNPay official sortObject function
   const sortedParams = sortObject(cleanParams);
   
-  // Create query string for hash calculation using querystring.stringify
-  // VNPay requires: Use querystring.stringify which uses + for spaces (not %20)
-  const hashQueryString = querystring.stringify(sortedParams);
+  // Build hash data using qs.stringify with encode: false (VNPay official method)
+  const signData = qs.stringify(sortedParams, { encode: false });
   
   // Create hash (HMAC SHA512) - VNPay standard
-  // Hash is calculated on query string from querystring.stringify
   const hmac = crypto.createHmac('sha512', trimmedSecretKey);
-  hmac.update(hashQueryString, 'utf-8');
-  const vnp_SecureHash = hmac.digest('hex');
+  const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
   
   // Add hash to params
-  sortedParams['vnp_SecureHash'] = vnp_SecureHash;
+  sortedParams['vnp_SecureHash'] = signed;
   
-  // Create final query string with hash using querystring.stringify
-  // This ensures consistent encoding format
-  const finalQueryString = querystring.stringify(sortedParams);
+  // Create final query string with hash using qs.stringify with encode: false
+  const finalQueryString = qs.stringify(sortedParams, { encode: false });
   
   return `${vnpUrl}?${finalQueryString}`;
 }
@@ -86,16 +98,15 @@ function verifyHash(params, secretKey) {
     }
   });
   
-  // Sort parameters by key
+  // Sort parameters using VNPay official sortObject function
   const sortedParams = sortObject(cleanParams);
   
-  // Create query string using querystring.stringify (same format as createPaymentUrl)
-  const queryString = querystring.stringify(sortedParams);
+  // Build hash data using qs.stringify with encode: false (same as createPaymentUrl)
+  const signData = qs.stringify(sortedParams, { encode: false });
   
   // Calculate hash
   const hmac = crypto.createHmac('sha512', trimmedSecretKey);
-  hmac.update(queryString, 'utf-8');
-  const calculatedHash = hmac.digest('hex');
+  const calculatedHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
   
   // Compare hashes
   return calculatedHash === vnp_SecureHash;

@@ -119,6 +119,33 @@ exports.vnpayInit = async (req, res, next) => {
     // Generate transaction reference
     const vnp_TxnRef = generateTxnRef(booking_id);
 
+    // Helper function to remove Vietnamese accents and convert to ASCII
+    const removeVietnameseAccents = (str) => {
+      if (!str) return '';
+      return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .replace(/[^\x00-\x7F]/g, ''); // Remove any remaining non-ASCII
+    };
+
+    // Format station name: remove accents and limit length (VNPay max 255 chars for OrderInfo)
+    const stationName = booking.station?.station_name || 'EV Charging Station';
+    const cleanStationName = removeVietnameseAccents(stationName).substring(0, 100);
+    const orderInfo = `Thanh toan don hang ${booking_id} - ${cleanStationName}`.substring(0, 255);
+
+    // Get IP address - ensure it's IPv4 (VNPay may not accept IPv6)
+    let clientIp = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || '127.0.0.1';
+    // If IPv6 (::1), convert to IPv4
+    if (clientIp === '::1' || clientIp === '::ffff:127.0.0.1') {
+      clientIp = '127.0.0.1';
+    }
+    // Extract first IP if x-forwarded-for contains multiple IPs
+    if (clientIp.includes(',')) {
+      clientIp = clientIp.split(',')[0].trim();
+    }
+
     // Create VNPay parameters
     const vnp_Params = {
       vnp_Version: '2.1.0',
@@ -127,11 +154,11 @@ exports.vnpayInit = async (req, res, next) => {
       vnp_Amount: formatAmount(total_amount),
       vnp_CurrCode: 'VND',
       vnp_TxnRef: vnp_TxnRef,
-      vnp_OrderInfo: `Thanh toan don hang ${booking_id} - ${booking.station?.station_name || 'EV Charging Station'}`,
+      vnp_OrderInfo: orderInfo, // ASCII only, max 255 chars
       vnp_OrderType: 'other',
       vnp_Locale: 'vn',
       vnp_ReturnUrl: vnp_ReturnUrl,
-      vnp_IpAddr: req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || '127.0.0.1',
+      vnp_IpAddr: clientIp, // IPv4 only
       vnp_CreateDate: new Date().toISOString().replace(/[-:T]/g, '').substring(0, 14) // YYYYMMDDHHmmss
     };
 
