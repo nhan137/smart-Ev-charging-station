@@ -2,6 +2,29 @@
   max-width: 1600px;
 }
 
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn-text {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.action-btn-text:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
 /* Vehicle Badge */
 .vehicle-badge {
   display: inline-block;
