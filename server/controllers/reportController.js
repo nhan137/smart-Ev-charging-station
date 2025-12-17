@@ -767,9 +767,24 @@ exports.getManagerInbox = async (req, res, next) => {
       params
     );
 
+    // Format response để khớp với UI (Hình 10)
+    const formattedRows = rows.map(row => ({
+      report_id: row.report_id,
+      report_code: row.report_code, // REP-1001, REP-1002
+      reporter_name: row.reporter_name, // Tên người dùng
+      station_id: row.station_id,
+      station_name: row.station_name, // Tên trạm sạc
+      title: row.title, // Tiêu đề
+      description: row.description, // Mô tả
+      status: row.status, // pending | resolved
+      status_label: row.status === 'resolved' ? 'resolved' : 'pending', // Để hiển thị badge
+      reported_at: row.reported_at, // Thời gian báo cáo
+      updated_at: row.updated_at
+    }));
+
     return res.json({
       success: true,
-      data: rows
+      data: formattedRows
     });
   } catch (err) {
     return next(err);

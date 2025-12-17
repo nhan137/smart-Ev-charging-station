@@ -40,10 +40,29 @@ exports.getManagerStations = async (req, res, next) => {
       order: [['created_at', 'DESC']]
     });
 
+    // Format response để FE dễ hiển thị
+    const formattedStations = stations.map(station => {
+      const stationData = station.toJSON();
+      return {
+        station_id: stationData.station_id,
+        station_code: `#${stationData.station_id}`, // MÃ TRẠM: #1, #2
+        station_name: stationData.station_name,
+        address: stationData.address,
+        price_per_kwh: parseFloat(stationData.price_per_kwh) || 0,
+        price_display: `${parseFloat(stationData.price_per_kwh || 0).toLocaleString('vi-VN')} đ/kWh`, // Format: 3,500 đ/kWh
+        total_slots: stationData.total_slots,
+        available_slots: stationData.available_slots,
+        slots_display: `${stationData.available_slots}/${stationData.total_slots}`, // Format: 3/6
+        status: stationData.status,
+        status_label: stationData.status === 'active' ? 'Hoạt động' : 
+                     stationData.status === 'maintenance' ? 'Bảo trì' : 'Ngừng hoạt động'
+      };
+    });
+
     res.status(200).json({
       success: true,
-      data: stations,
-      count: stations.length
+      data: formattedStations,
+      count: formattedStations.length
     });
   } catch (error) {
     next(error);
@@ -118,12 +137,30 @@ exports.getStationDetail = async (req, res, next) => {
       created_at: review.created_at
     }));
 
-    // Format station data
+    // Format station data để khớp với UI (Hình 4)
     const stationData = station.toJSON();
+    
+    // Map status to display label
+    const statusMap = {
+      'active': 'Hoạt động',
+      'maintenance': 'Bảo trì',
+      'inactive': 'Ngừng hoạt động'
+    };
+
+    // Format price
+    const priceDisplay = `${parseFloat(stationData.price_per_kwh || 0).toLocaleString('vi-VN')} đ/kWh`;
+
+    // Format slots
+    const slotsDisplay = `${stationData.available_slots}/${stationData.total_slots} chỗ trống`;
+
     const response = {
       ...stationData,
+      status_label: statusMap[stationData.status] || stationData.status,
+      price_display: priceDisplay, // Format: 3,500 đ/kWh
+      slots_display: slotsDisplay, // Format: 3/6 chỗ trống
       average_rating: averageRating ? parseFloat(averageRating) : null,
       total_reviews: parseInt(totalReviews),
+      rating_display: averageRating ? `${averageRating} (${totalReviews} đánh giá)` : `0 (${totalReviews} đánh giá)`,
       recent_reviews: formattedReviews
     };
 

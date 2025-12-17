@@ -159,6 +159,27 @@ exports.getDashboardOverview = async (req, res, next) => {
     const percent =
       totalSlots > 0 ? parseFloat(((usedSlots / totalSlots) * 100).toFixed(2)) : 0;
 
+    // 6. Get stations list for "Trạm phụ trách" section
+    const stationsList = await Station.findAll({
+      where: { manager_id: managerId },
+      attributes: [
+        'station_id',
+        'station_name',
+        'total_slots',
+        'available_slots'
+      ],
+      order: [['created_at', 'DESC']],
+      limit: 5
+    });
+
+    const formattedStations = stationsList.map(s => ({
+      station_id: s.station_id,
+      station_name: s.station_name,
+      total_slots: s.total_slots,
+      available_slots: s.available_slots,
+      used_slots: s.total_slots - s.available_slots
+    }));
+
     return res.json({
       success: true,
       data: {
@@ -169,6 +190,7 @@ exports.getDashboardOverview = async (req, res, next) => {
           today_bookings: todayBookings,
           today_revenue: Number(todayRevenue)
         },
+        stations: formattedStations, // Danh sách trạm phụ trách
         recent_bookings: recent,
         capacity: {
           total_slots: totalSlots,

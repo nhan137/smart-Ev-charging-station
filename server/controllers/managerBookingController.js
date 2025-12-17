@@ -107,19 +107,60 @@ exports.getStationBookings = async (req, res, next) => {
       order: [['created_at', 'DESC']]
     });
 
-    // Format response
+    // Format response để khớp với UI (Hình 5)
+    const vehicleTypeMap = {
+      'xe_may_usb': 'Xe máy USB',
+      'xe_may_ccs': 'Xe máy CCS',
+      'oto_ccs': 'Ô tô CCS'
+    };
+
+    const statusMap = {
+      'pending': 'Chờ xác nhận',
+      'confirmed': 'Đã xác nhận',
+      'charging': 'Đang sạc',
+      'completed': 'Hoàn thành',
+      'cancelled': 'Đã hủy'
+    };
+
     const formattedBookings = bookings.map(booking => {
       const bookingData = booking.toJSON();
+      
+      // Format thời gian
+      const startTime = new Date(bookingData.start_time);
+      const endTime = new Date(bookingData.end_time);
+      const startTimeStr = startTime.toLocaleString('vi-VN', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      const endTimeStr = endTime.toLocaleString('vi-VN', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+
       return {
         booking_id: bookingData.booking_id,
+        booking_code: `#${bookingData.booking_id}`, // MÃ BOOKING: #1, #2
         customer_name: bookingData.user?.full_name || null,
         customer_phone: bookingData.user?.phone || null,
         vehicle_type: bookingData.vehicle_type,
+        vehicle_type_display: vehicleTypeMap[bookingData.vehicle_type] || bookingData.vehicle_type,
         start_time: bookingData.start_time,
+        start_time_display: startTimeStr, // Format: 14:00:00 20/1/2025
         end_time: bookingData.end_time,
+        end_time_display: endTimeStr, // Format: 16:00:00 20/1/2025
         status: bookingData.status,
+        status_label: statusMap[bookingData.status] || bookingData.status,
         checkin_code: bookingData.checkin_code,
         total_cost: bookingData.total_cost ? parseFloat(bookingData.total_cost) : null,
+        total_cost_display: bookingData.total_cost ? `$ ${parseFloat(bookingData.total_cost).toLocaleString('vi-VN')}₫` : null, // Format: $ 105,000₫
         created_at: bookingData.created_at
       };
     });
