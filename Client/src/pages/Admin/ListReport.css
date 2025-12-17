@@ -1,0 +1,255 @@
+.admin-list-report-page {
+  width: 100%;
+}
+
+.list-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.list-report-header .header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.list-report-header .header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.list-report-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.list-report-header p {
+  margin: 0.25rem 0 0;
+  color: #64748b;
+}
+
+.list-report-table-card {
+  background: white;
+  border-radius: 16px;
+  border: 2px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.list-report-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.list-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1100px;
+}
+
+.list-report-table thead th {
+  text-align: left;
+  padding: 1rem;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 800;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.list-report-table tbody td {
+  padding: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+  color: #0f172a;
+}
+
+.list-report-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-weight: 700;
+  color: #334155;
+}
+
+.title-cell {
+  font-weight: 800;
+  color: #0f172a;
+  max-width: 320px;
+}
+
+.desc-cell {
+  color: #334155;
+  max-width: 420px;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.center {
+  text-align: center;
+}
+
+.btn-icon {
+  border: 2px solid #e2e8f0;
+  background: white;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #0f172a;
+}
+
+.btn-icon:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  border: 2px solid transparent;
+}
+
+.status-pending {
+  background: #fff7ed;
+  color: #c2410c;
+  border-color: #fed7aa;
+}
+
+.status-resolved {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.btn-action {
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  font-weight: 800;
+  border: 2px solid #e2e8f0;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-action:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.btn-resolve {
+  border-color: #a7f3d0;
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.btn-reopen {
+  border-color: #fed7aa;
+  color: #c2410c;
+  background: #fff7ed;
+}
+
+.empty-cell {
+  text-align: center;
+  padding: 2rem;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.image-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  z-index: 3000;
+}
+
+.image-modal {
+  width: min(920px, 100%);
+  background: white;
+  border-radius: 16px;
+  border: 2px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.image-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.image-modal-header h3 {
+  margin: 0;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.btn-close {
+  border: 2px solid #e2e8f0;
+  background: white;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-close:hover {
+  background: #f8fafc;
+}
+
+.image-grid {
+  padding: 1rem 1.25rem 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.image-grid img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 2px solid #e2e8f0;
+}
+
+.image-empty {
+  padding: 2rem 1.25rem;
+  color: #64748b;
+  font-weight: 800;
+}
