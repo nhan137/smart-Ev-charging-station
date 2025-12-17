@@ -59,13 +59,14 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
-    // 1. Check station exists & has available slots
+    // 1. Check station exists & has available slots (include manager_id)
     const station = await Station.findOne({
       where: {
         station_id: station_id,
         available_slots: { [Op.gt]: 0 },
         status: 'active'
       },
+      attributes: ['station_id', 'station_name', 'price_per_kwh', 'station_type', 'manager_id'],
       transaction
     });
 
@@ -174,13 +175,30 @@ exports.createBooking = async (req, res, next) => {
       }
     );
 
-    // 7. Create notification
+    // 7. Create notification for User
     await Notification.create({
       user_id,
       title: 'Đặt lịch thành công',
       message: `Lịch sạc của bạn đã được tạo tại ${station.station_name}`,
       type: 'booking'
     }, { transaction });
+
+    // 8. Create notification for Manager (nếu trạm có manager)
+    if (station.manager_id) {
+      // Lấy thông tin user để hiển thị tên trong notification
+      const user = await User.findByPk(user_id, {
+        attributes: ['full_name'],
+        transaction
+      });
+      const userName = user ? user.full_name : 'Người dùng';
+
+      await Notification.create({
+        user_id: station.manager_id,
+        title: 'Có đặt lịch mới cần xác nhận',
+        message: `Khách hàng ${userName} đã đặt lịch tại trạm ${station.station_name}. Vui lòng vào xác nhận.`,
+        type: 'booking'
+      }, { transaction });
+    }
 
     // Commit transaction
     await transaction.commit();
