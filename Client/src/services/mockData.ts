@@ -101,11 +101,11 @@ export const mockBookings = [
   {
     booking_id: 1,
     user_id: 1,
-    station_id: 1,
+station_id: 1,
     port_id: 1,
-    start_time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    status: 'completed',
+    start_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+    status: 'confirmed',
     total_kwh: 45.5,
     total_price: 159250,
     payment_status: 'paid'
@@ -216,7 +216,7 @@ export const mockNotifications = [
     recipients: 'all',
     recipientCount: 1234,
     sentAt: '2024-11-25T14:30:00',
-    sentBy: 'Admin System',
+sentBy: 'Admin System',
     status: 'sent'
   },
   {
@@ -262,6 +262,124 @@ export const mockNotifications = [
     sentAt: '2024-11-22T08:30:00',
     sentBy: 'Admin System',
     status: 'sent'
+  }
+];
+
+export const mockManagerNotifications = [
+  {
+    notification_id: 1,
+    title: 'Chào mừng Manager',
+    message: 'Bạn có thể theo dõi các báo cáo và lịch sử xử lý tại đây.',
+    type: 'system',
+    recipients: 'specific',
+    recipientCount: 1,
+    sentAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    sentBy: 'Admin System',
+    status: 'sent',
+    target_manager_id: 2
+  }
+];
+
+// Mock Reports (User report history)
+export const mockReports = [
+  {
+    report_id: 'REP-1001',
+    user_id: 1,
+    user_name: 'Nguyễn Văn A',
+    station_id: 2,
+    station_name: 'Trạm sạc Sơn Trà Premium',
+    title: 'Cổng sạc số 3 không nhận xe',
+    description:
+      'Mình cắm sạc vào cổng số 3 nhưng hệ thống không nhận, đèn báo không sáng. Thử nhiều lần vẫn không được.',
+    status: 'pending',
+    reported_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    last_update_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    images: [
+      'https://images.unsplash.com/photo-1617704548623-340376564e68?w=800',
+      'https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=800'
+    ],
+    status_history: [
+      {
+        status: 'pending',
+        at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        note: 'Báo cáo đã được tạo'
+      }
+    ]
+  },
+  {
+    report_id: 'REP-1002',
+    user_id: 1,
+    user_name: 'Nguyễn Văn A',
+    station_id: 1,
+    station_name: 'Trạm sạc Hải Châu',
+    title: 'Khu vực sạc bị mất điện tạm thời',
+    description:
+      'Khoảng 19:30 khu vực sạc bị mất điện, màn hình hiển thị tắt và không thể bắt đầu phiên sạc. Mong được kiểm tra sớm.',
+    status: 'resolved',
+    reported_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    last_update_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    images: ['https://images.unsplash.com/photo-1621361365424-06f0e1eb5c49?w=800'],
+    status_history: [
+      {
+        status: 'pending',
+        at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        note: 'Báo cáo đã được tạo'
+      },
+      {
+        status: 'resolved',
+        at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+        note: 'Manager đã kiểm tra và khôi phục nguồn điện'
+      }
+    ]
+  }
+];
+
+export const mockAdminReports = [
+  {
+    report_id: 'REP-2001',
+    station_id: 1,
+    station_name: 'Trạm sạc Hải Châu',
+    title: 'Thiết bị đo điện năng sai số bất thường',
+    status: 'pending_admin',
+    reported_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    report_id: 'REP-2002',
+    station_id: 2,
+    station_name: 'Trạm sạc Sơn Trà Premium',
+    title: 'Lỗi đồng bộ trạng thái cổng sạc với app',
+    status: 'admin_handled',
+    reported_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
+  }
+];
+
+export const mockManagerReportsForAdmin = [
+  {
+    report_id: 'MREP-3001',
+    station_name: 'Trạm sạc Hải Châu',
+    manager_id: 3,
+    manager_name: 'Manager Hải Châu',
+    title: 'Đề nghị thay thế đầu sạc bị hư',
+    description:
+      'Đầu sạc #2 có dấu hiệu cháy nhẹ ở phần tiếp xúc. Đề nghị tạm ngưng cổng sạc này và thay thế linh kiện để đảm bảo an toàn cho người dùng.',
+    images: ['https://images.unsplash.com/photo-1555480320-86e7f17f1733?w=800'],
+    status: 'pending',
+    reported_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    report_id: 'MREP-3002',
+    station_name: 'Trạm sạc Sơn Trà Premium',
+    manager_id: 4,
+    manager_name: 'Manager Sơn Trà',
+    title: 'Sự cố mất kết nối hệ thống giám sát',
+    description:
+      'Hệ thống giám sát bị mất kết nối gián đoạn, dữ liệu trạng thái trụ cập nhật chậm. Đã kiểm tra router và reset modem; cần admin kiểm tra cấu hình server log.',
+    images: [
+      'https://images.unsplash.com/photo-1581091870627-3c66e9a5b3f1?w=800',
+      'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800'
+    ],
+    status: 'resolved',
+reported_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()
   }
 ];
 
