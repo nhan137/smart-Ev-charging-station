@@ -34,6 +34,9 @@ router.put('/stations/:id/status', authenticate, authorize('manager'), managerSt
 
 // ========== Booking Management APIs ==========
 
+// GET /api/manager/bookings/history - Get booking history for all stations managed by manager
+router.get('/bookings/history', authenticate, authorize('manager'), managerBookingController.getBookingHistory);
+
 // GET /api/manager/stations/:id/bookings - Get booking list for a station
 router.get('/stations/:id/bookings', authenticate, authorize('manager'), managerBookingController.getStationBookings);
 

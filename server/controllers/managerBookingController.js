@@ -248,6 +248,254 @@ exports.confirmBooking = async (req, res, next) => {
 };
 
 /**
+ * Get Manager Booking History
+ * GET /api/manager/bookings/history
+ * 
+ * Mục đích: Manager xem lịch sử đặt lịch tại TẤT CẢ các trạm mình quản lý
+ * 
+ * Query params:
+ * - search: Tìm theo tên, email, trạm
+ * - status: Filter theo trạng thái
+ * - from_date, to_date: Filter theo khoảng thời gian
+ * 
+ * Response:
+ * - overview: { total, completed, pending, revenue }
+ * - bookings: Danh sách booking với đầy đủ thông tin
+ */
+exports.getBookingHistory = async (req, res, next) => {
+  try {
+    const managerId = req.user.user_id;
+    const { search, status, from_date, to_date, page = 1, limit = 10 } = req.query;
+
+    // 1. Lấy danh sách station_id mà manager quản lý
+    const stations = await Station.findAll({
+      where: { manager_id: managerId },
+      attributes: ['station_id', 'station_name']
+    });
+
+    if (stations.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          overview: {
+            total: 0,
+            completed: 0,
+            pending: 0,
+            revenue: 0
+          },
+          bookings: [],
+          pagination: {
+            total: 0,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            totalPages: 0
+          }
+        }
+      });
+    }
+
+    const stationIds = stations.map(s => s.station_id);
+
+    // 2. Build WHERE clause cho bookings
+    // Lịch sử chỉ hiển thị booking đã phê duyệt/hủy/hoàn thành (không hiển thị pending)
+    const whereConditions = {
+      station_id: { [Op.in]: stationIds },
+      status: { [Op.in]: ['confirmed', 'cancelled', 'completed', 'charging'] } // Bỏ 'pending'
+    };
+
+    // Filter by status (nếu có)
+    if (status && status !== 'all') {
+      if (status === 'confirmed') {
+        whereConditions.status = 'confirmed';
+      } else if (status === 'completed') {
+        whereConditions.status = 'completed';
+      } else if (status === 'cancelled') {
+        whereConditions.status = 'cancelled';
+      } else if (status === 'charging') {
+        whereConditions.status = 'charging';
+      }
+      // Không filter 'pending' vì không hiển thị trong lịch sử
+    }
+
+    // Filter by date range
+    if (from_date || to_date) {
+      whereConditions.start_time = {};
+      if (from_date) {
+        whereConditions.start_time[Op.gte] = new Date(from_date);
+      }
+      if (to_date) {
+        const endDate = new Date(to_date);
+        endDate.setHours(23, 59, 59, 999);
+        whereConditions.start_time[Op.lte] = endDate;
+      }
+    }
+
+    // 3. Calculate overview stats (Tổng booking, Hoàn thành, Chờ xử lý, Doanh thu)
+    const allBookings = await Booking.findAll({
+      where: { station_id: { [Op.in]: stationIds } },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['full_name', 'email'],
+          required: true
+        },
+        {
+          model: Station,
+          as: 'station',
+          attributes: ['station_name'],
+          required: true
+        }
+      ],
+      attributes: ['booking_id', 'status', 'total_cost']
+    });
+
+    // Tính overview: chỉ đếm các booking đã phê duyệt/hủy/hoàn thành (không đếm pending)
+    const historyBookings = allBookings.filter(b => 
+      ['confirmed', 'cancelled', 'completed', 'charging'].includes(b.status)
+    );
+
+    const overview = {
+      total: historyBookings.length,
+      completed: historyBookings.filter(b => b.status === 'completed').length,
+      pending: allBookings.filter(b => b.status === 'pending').length, // Vẫn đếm pending để hiển thị trong overview
+      revenue: historyBookings
+        .filter(b => b.status === 'completed')
+        .reduce((sum, b) => sum + (parseFloat(b.total_cost) || 0), 0)
+    };
+
+    // 4. Apply search filter (nếu có)
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      whereConditions[Op.or] = [
+        { '$user.full_name$': { [Op.like]: searchTerm } },
+        { '$user.email$': { [Op.like]: searchTerm } },
+        { '$station.station_name$': { [Op.like]: searchTerm } }
+      ];
+    }
+
+    // 5. Get bookings with pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const { count, rows: bookings } = await Booking.findAndCountAll({
+      where: whereConditions,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['user_id', 'full_name', 'email'],
+          required: true
+        },
+        {
+          model: Station,
+          as: 'station',
+          attributes: ['station_id', 'station_name'],
+          required: true
+        }
+      ],
+      attributes: [
+        'booking_id',
+        'vehicle_type',
+        'start_time',
+        'end_time',
+        'status',
+        'total_cost',
+        'created_at'
+      ],
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit),
+      offset: offset
+    });
+
+    // 6. Format response
+    const formattedBookings = bookings.map(booking => {
+      const bookingData = booking.toJSON();
+      
+      // Map vehicle_type to display name
+      const vehicleTypeMap = {
+        'xe_may_usb': 'Xe máy USB',
+        'xe_may_ccs': 'Xe máy CCS',
+        'oto_ccs': 'Ô tô CCS'
+      };
+
+      // Map status to display name
+      const statusMap = {
+        'pending': 'Chờ xác nhận',
+        'confirmed': 'Đã xác nhận',
+        'charging': 'Đang sạc',
+        'completed': 'Hoàn thành',
+        'cancelled': 'Đã hủy'
+      };
+
+      // Format date
+      const startTime = new Date(bookingData.start_time);
+      const endTime = new Date(bookingData.end_time);
+      const dateStr = startTime.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const timeStr = `${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}-${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+
+      // Xác định display_message dựa trên status
+      // Lịch sử chỉ hiển thị text, không có nút
+      let displayMessage = null;
+
+      if (bookingData.status === 'confirmed') {
+        // Đã phê duyệt → Hiển thị text "Đặt lịch thành công"
+        displayMessage = 'Đặt lịch thành công';
+      } else if (bookingData.status === 'cancelled') {
+        // Đã hủy → Hiển thị text "Đặt lịch thất bại"
+        displayMessage = 'Đặt lịch thất bại';
+      } else if (bookingData.status === 'completed') {
+        // Hoàn thành → Có thể hiển thị "Hoàn thành" hoặc để null
+        displayMessage = 'Hoàn thành';
+      } else if (bookingData.status === 'charging') {
+        // Đang sạc → Hiển thị "Đang sạc"
+        displayMessage = 'Đang sạc';
+      }
+
+      return {
+        booking_id: bookingData.booking_id,
+        booking_code: `#${bookingData.booking_id}`,
+        customer: {
+          name: bookingData.user?.full_name || 'N/A',
+          email: bookingData.user?.email || 'N/A'
+        },
+        station: {
+          id: bookingData.station?.station_id,
+          name: bookingData.station?.station_name || 'N/A'
+        },
+        vehicle_type: vehicleTypeMap[bookingData.vehicle_type] || bookingData.vehicle_type,
+        time: {
+          date: dateStr,
+          range: timeStr,
+          full: `${dateStr} ${timeStr}`
+        },
+        status: bookingData.status,
+        status_label: statusMap[bookingData.status] || bookingData.status,
+        total_cost: bookingData.total_cost ? parseFloat(bookingData.total_cost) : 0,
+        created_at: bookingData.created_at,
+        // display_message: Text hiển thị trong cột "THAO TÁC" (lịch sử chỉ có text, không có nút)
+        display_message: displayMessage // "Đặt lịch thành công" | "Đặt lịch thất bại" | "Hoàn thành" | "Đang sạc"
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        overview,
+        bookings: formattedBookings,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(count / parseInt(limit))
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Cancel Booking
  * PUT /api/bookings/:booking_id/cancel
  * 
