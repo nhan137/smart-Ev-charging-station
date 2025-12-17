@@ -72,10 +72,53 @@ exports.getUsers = async (req, res, next) => {
       offset: offset
     });
 
+    // Format response để khớp với UI (Hình 1)
+    const roleMap = {
+      1: { name: 'User', label: 'User' },
+      2: { name: 'Manager', label: 'Manager' },
+      3: { name: 'Admin', label: 'Admin' }
+    };
+
+    const statusMap = {
+      'active': { label: 'Hoạt động', color: 'green' },
+      'locked': { label: 'Đã khóa', color: 'red' }
+    };
+
+    const formattedUsers = users.map(user => {
+      const userData = user.toJSON();
+      const role = roleMap[userData.role_id] || { name: 'Unknown', label: 'Unknown' };
+      const status = statusMap[userData.status] || { label: userData.status, color: 'gray' };
+
+      // Format ngày tạo
+      const createdDate = new Date(userData.created_at);
+      const createdDateStr = createdDate.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+
+      return {
+        user_id: userData.user_id,
+        user_code: `#${userData.user_id}`, // ID: #1, #2
+        full_name: userData.full_name, // Họ tên
+        email: userData.email, // Email
+        phone: userData.phone || 'N/A', // SĐT
+        role_id: userData.role_id,
+        role_name: role.name, // Vai trò: User, Manager, Admin
+        role_label: role.label, // Để hiển thị badge
+        status: userData.status,
+        status_label: status.label, // Trạng thái: Hoạt động, Đã khóa
+        status_color: status.color, // Để hiển thị màu badge
+        created_at: userData.created_at,
+        created_date: createdDateStr, // Ngày tạo: 15/1/2025
+        role: userData.role // Giữ nguyên để tương thích
+      };
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        users,
+        users: formattedUsers,
         pagination: {
           total: count,
           page: parseInt(page),
@@ -147,10 +190,42 @@ exports.createUser = async (req, res, next) => {
       attributes: { exclude: ['password'] }
     });
 
+    // Format response để khớp với UI
+    const userData = userWithRole.toJSON();
+    const roleMap = {
+      1: { name: 'User', label: 'User' },
+      2: { name: 'Manager', label: 'Manager' },
+      3: { name: 'Admin', label: 'Admin' }
+    };
+
+    const role = roleMap[userData.role_id] || { name: 'Unknown', label: 'Unknown' };
+    const createdDate = new Date(userData.created_at);
+    const createdDateStr = createdDate.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    const formattedUser = {
+      user_id: userData.user_id,
+      user_code: `#${userData.user_id}`,
+      full_name: userData.full_name,
+      email: userData.email,
+      phone: userData.phone || 'N/A',
+      role_id: userData.role_id,
+      role_name: role.name,
+      role_label: role.label,
+      status: userData.status,
+      status_label: userData.status === 'active' ? 'Hoạt động' : 'Đã khóa',
+      created_at: userData.created_at,
+      created_date: createdDateStr,
+      role: userData.role
+    };
+
     res.status(201).json({
       success: true,
       message: 'User created successfully',
-      data: userWithRole
+      data: formattedUser
     });
   } catch (error) {
     next(error);
@@ -181,9 +256,30 @@ exports.getUserById = async (req, res, next) => {
       });
     }
 
+    // Format response để khớp với UI (Hình 2 - Chi tiết người dùng)
+    const userData = user.toJSON();
+    const roleMap = {
+      1: 'User',
+      2: 'Manager',
+      3: 'Admin'
+    };
+
+    const formattedUser = {
+      user_id: userData.user_id,
+      user_code: `#${userData.user_id}`, // ID: #1
+      email: userData.email, // Email
+      full_name: userData.full_name, // Họ tên
+      phone: userData.phone || 'N/A', // Số điện thoại
+      role_id: userData.role_id,
+      role_name: roleMap[userData.role_id] || 'Unknown', // Vai trò: User, Manager, Admin
+      status: userData.status,
+      created_at: userData.created_at,
+      role: userData.role // Giữ nguyên để tương thích
+    };
+
     res.status(200).json({
       success: true,
-      data: user
+      data: formattedUser
     });
   } catch (error) {
     next(error);
@@ -283,10 +379,42 @@ exports.updateUser = async (req, res, next) => {
       attributes: { exclude: ['password'] }
     });
 
+    // Format response để khớp với UI
+    const userData = updatedUser.toJSON();
+    const roleMap = {
+      1: { name: 'User', label: 'User' },
+      2: { name: 'Manager', label: 'Manager' },
+      3: { name: 'Admin', label: 'Admin' }
+    };
+
+    const role = roleMap[userData.role_id] || { name: 'Unknown', label: 'Unknown' };
+    const createdDate = new Date(userData.created_at);
+    const createdDateStr = createdDate.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    const formattedUser = {
+      user_id: userData.user_id,
+      user_code: `#${userData.user_id}`,
+      full_name: userData.full_name,
+      email: userData.email,
+      phone: userData.phone || 'N/A',
+      role_id: userData.role_id,
+      role_name: role.name,
+      role_label: role.label,
+      status: userData.status,
+      status_label: userData.status === 'active' ? 'Hoạt động' : 'Đã khóa',
+      created_at: userData.created_at,
+      created_date: createdDateStr,
+      role: userData.role
+    };
+
     res.status(200).json({
       success: true,
       message: 'User updated successfully',
-      data: updatedUser
+      data: formattedUser
     });
   } catch (error) {
     next(error);

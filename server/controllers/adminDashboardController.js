@@ -72,13 +72,20 @@ exports.getOverview = async (req, res, next) => {
     });
     const totalKwh = parseFloat(kWhResult[0]?.total_kwh || 0);
 
+    // Format response để khớp với UI (Hình Dashboard)
     res.status(200).json({
       success: true,
       data: {
-        total_users: totalUsers,
-        total_bookings: totalBookings,
-        total_revenue: totalRevenue,
-        total_kwh: totalKwh
+        total_users: totalUsers,           // ← "1,234 Khách hàng"
+        total_users_display: totalUsers.toLocaleString('vi-VN'), // Format: "1,234"
+        total_bookings: totalBookings,     // ← "567 Đặt lịch"
+        total_bookings_display: totalBookings.toLocaleString('vi-VN'), // Format: "567"
+        total_revenue: totalRevenue,       // ← "125.0M Tháng này"
+        total_revenue_display: totalRevenue >= 1000000 
+          ? `${(totalRevenue / 1000000).toFixed(1)}M` 
+          : `${(totalRevenue / 1000).toFixed(1)}K`, // Format: "125.0M" hoặc "125.0K"
+        total_kwh: totalKwh,               // ← "8,450 Năng lượng tiêu thụ"
+        total_kwh_display: totalKwh.toLocaleString('vi-VN') // Format: "8,450"
       }
     });
   } catch (error) {
@@ -147,13 +154,27 @@ exports.getHighlights = async (req, res, next) => {
       where: { status: 'maintenance' }
     });
 
+    // Format response để khớp với UI
     res.status(200).json({
       success: true,
       data: {
-        top_station: topStation,
-        top_spender: topSpender,
-        cancel_rate: parseFloat(cancelRate),
-        maintenance_stations: maintenanceStations
+        top_station: {
+          ...topStation,
+          display: topStation.station_name 
+            ? `${topStation.station_name} - ${topStation.total_bookings} booking`
+            : 'Chưa có dữ liệu'
+        }, // ← "Trạm sạc Hải Châu - 250 booking"
+        top_spender: {
+          ...topSpender,
+          display: topSpender.full_name
+            ? `${topSpender.full_name} - ${parseFloat(topSpender.total_spent).toLocaleString('vi-VN')}₫`
+            : 'Chưa có dữ liệu'
+        }, // ← "Nguyễn Văn A - 5,000,000₫"
+        cancel_rate: parseFloat(cancelRate), // ← "5.2%"
+        cancel_rate_display: `${cancelRate}%`, // Format: "5.2%"
+        cancel_rate_status: parseFloat(cancelRate) > 5 ? 'Cần cải thiện' : 'Tốt', // ← "Cần cải thiện"
+        maintenance_stations: maintenanceStations, // ← "2 Trạm"
+        maintenance_stations_display: `${maintenanceStations} Trạm` // Format: "2 Trạm"
       }
     });
   } catch (error) {
@@ -395,37 +416,76 @@ exports.getRecentActivities = async (req, res, next) => {
 
     // Format activities: Kết hợp bookings và payments, sắp xếp theo thời gian
     // Ví dụ: 
-    // - "Nguyễn Văn A đặt lịch" (booking)
+    // - "Nguyễn Văn A đặt lịch tại Trạm Hải Châu" (booking)
     // - "Trần Thị B thanh toán 150,000₫" (payment)
     // - "Lê Văn C hủy booking #1234" (booking cancelled)
     const activities = [
       // Chuyển bookings thành activities
-      ...recentBookings.map(booking => ({
-        id: booking.booking_id,
-        type: 'booking',
-        user_name: booking.user?.full_name || null,
-        description: `${booking.user?.full_name || 'User'} đặt lịch`,
-        status: booking.status,
-        created_at: booking.created_at
-      })),
+      ...recentBookings.map(booking => {
+        const bookingData = booking.toJSON();
+        let description = '';
+        if (bookingData.status === 'pending') {
+          description = `${bookingData.user?.full_name || 'User'} đặt lịch`;
+        } else if (bookingData.status === 'cancelled') {
+          description = `${bookingData.user?.full_name || 'User'} hủy booking #${bookingData.booking_id}`;
+        } else {
+          description = `${bookingData.user?.full_name || 'User'} đặt lịch`;
+        }
+        return {
+          id: bookingData.booking_id,
+          type: 'booking',
+          user_name: bookingData.user?.full_name || null,
+          description: description,
+          status: bookingData.status,
+          created_at: bookingData.created_at
+        };
+      }),
       // Chuyển payments thành activities
-      ...recentPayments.map(payment => ({
-        id: payment.payment_id,
-        type: 'payment',
-        user_name: payment.user?.full_name || null,
-        description: `${payment.user?.full_name || 'User'} thanh toán ${parseFloat(payment.amount).toLocaleString('vi-VN')}₫`,
-        status: payment.status,
-        created_at: payment.payment_date
-      }))
+      ...recentPayments.map(payment => {
+        const paymentData = payment.toJSON();
+        return {
+          id: paymentData.payment_id,
+          type: 'payment',
+          user_name: paymentData.user?.full_name || null,
+          description: `${paymentData.user?.full_name || 'User'} thanh toán ${parseFloat(paymentData.amount).toLocaleString('vi-VN')}₫`,
+          status: paymentData.status,
+          created_at: paymentData.payment_date
+        };
+      })
     ]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) // Sắp xếp theo thời gian (mới nhất trước)
       .slice(0, 5); // Chỉ lấy 5 hoạt động mới nhất
 
+    // Format time ago (ví dụ: "5 phút trước", "1 giờ trước")
+    const formatTimeAgo = (date) => {
+      const now = new Date();
+      const diffMs = now - new Date(date);
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return 'Vừa xong';
+      if (diffMins < 60) return `${diffMins} phút trước`;
+      if (diffHours < 24) return `${diffHours} giờ trước`;
+      return `${diffDays} ngày trước`;
+    };
+
+    // Thêm time_ago vào notifications và activities
+    const formattedNotificationsWithTime = formattedNotifications.map(notif => ({
+      ...notif,
+      time_ago: formatTimeAgo(notif.created_at)
+    }));
+
+    const activitiesWithTime = activities.map(activity => ({
+      ...activity,
+      time_ago: formatTimeAgo(activity.created_at)
+    }));
+
     res.status(200).json({
       success: true,
       data: {
-        notifications: formattedNotifications, // 3 thông báo hệ thống
-        activities: activities // 5 hoạt động gần đây (bookings + payments)
+        notifications: formattedNotificationsWithTime, // 3 thông báo hệ thống (có time_ago)
+        activities: activitiesWithTime // 5 hoạt động gần đây (bookings + payments, có time_ago)
       }
     });
   } catch (error) {

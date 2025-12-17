@@ -471,9 +471,68 @@ exports.getReportsForAdmin = async (req, res, next) => {
        ORDER BY r.reported_at DESC`
     );
 
+    // Format response to match UI
+    const formattedRows = rows.map(row => {
+      // Parse image_url to array
+      let imageArray = [];
+      if (row.image_url) {
+        try {
+          imageArray = JSON.parse(row.image_url);
+        } catch (e) {
+          // If not JSON, treat as single string
+          imageArray = [row.image_url];
+        }
+      }
+
+      // Format status label
+      const statusLabel = row.status === 'pending' ? 'Đang chờ' : 'Đã xử lý';
+      const statusColor = row.status === 'pending' ? 'orange' : 'green';
+
+      // Format reported_at
+      const reportedDate = new Date(row.reported_at);
+      const hours = String(reportedDate.getHours()).padStart(2, '0');
+      const minutes = String(reportedDate.getMinutes()).padStart(2, '0');
+      const seconds = String(reportedDate.getSeconds()).padStart(2, '0');
+      const day = String(reportedDate.getDate()).padStart(2, '0');
+      const month = String(reportedDate.getMonth() + 1).padStart(2, '0');
+      const year = reportedDate.getFullYear();
+      const reportedAtDisplay = `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+
+      // Format description (truncate if too long)
+      const descriptionShort = row.description && row.description.length > 100 
+        ? row.description.substring(0, 100) + '...' 
+        : row.description;
+
+      // Action button logic
+      const actionButton = row.status === 'pending' 
+        ? { text: 'Đã xử lý', color: 'blue', action: 'resolve' }
+        : { text: 'Mở lại', color: 'orange', action: 'reopen' };
+
+      return {
+        report_id: row.report_id,
+        report_code: row.report_code, // MREP-3001
+        station_id: row.station_id,
+        station_name: row.station_name, // Trạm sạc Hải Châu
+        reporter_id: row.reporter_id,
+        manager_name: row.manager_name, // Manager Hải Châu
+        title: row.title, // Đề nghị thay thế đầu sạc bị hư
+        description: row.description, // Full description
+        description_short: descriptionShort, // Truncated for table display
+        image_url: row.image_url, // Raw JSON string
+        images: imageArray, // Parsed array of image URLs
+        has_images: imageArray.length > 0, // Boolean for showing image icon
+        status: row.status, // pending | resolved
+        status_label: statusLabel, // "Đang chờ" | "Đã xử lý"
+        status_color: statusColor, // orange | green
+        reported_at: row.reported_at,
+        reported_at_display: reportedAtDisplay, // "21:18:25 15/12/2025"
+        action_button: actionButton // { text, color, action }
+      };
+    });
+
     return res.json({
       success: true,
-      data: rows
+      data: formattedRows
     });
   } catch (err) {
     return next(err);
@@ -564,6 +623,92 @@ exports.updateReportStatus = async (req, res, next) => {
     }
 
     await conn.commit();
+
+    // Get updated report with full details for response
+    const [updatedRows] = await conn.query(
+      `SELECT 
+         r.report_id,
+         CONCAT('MREP-', LPAD(r.report_id, 4, '0')) AS report_code,
+         r.station_id,
+         s.station_name,
+         r.reporter_id,
+         u.full_name AS manager_name,
+         r.title,
+         r.description,
+         r.image_url,
+         r.status,
+         r.reported_at
+       FROM reports r
+       JOIN stations s ON r.station_id = s.station_id
+       JOIN users u ON r.reporter_id = u.user_id
+       WHERE r.report_id = ?`,
+      [report_id]
+    );
+
+    if (updatedRows.length > 0) {
+      const row = updatedRows[0];
+      
+      // Parse image_url to array
+      let imageArray = [];
+      if (row.image_url) {
+        try {
+          imageArray = JSON.parse(row.image_url);
+        } catch (e) {
+          imageArray = [row.image_url];
+        }
+      }
+
+      // Format status label
+      const statusLabel = row.status === 'pending' ? 'Đang chờ' : 'Đã xử lý';
+      const statusColor = row.status === 'pending' ? 'orange' : 'green';
+
+      // Format reported_at
+      const reportedDate = new Date(row.reported_at);
+      const hours = String(reportedDate.getHours()).padStart(2, '0');
+      const minutes = String(reportedDate.getMinutes()).padStart(2, '0');
+      const seconds = String(reportedDate.getSeconds()).padStart(2, '0');
+      const day = String(reportedDate.getDate()).padStart(2, '0');
+      const month = String(reportedDate.getMonth() + 1).padStart(2, '0');
+      const year = reportedDate.getFullYear();
+      const reportedAtDisplay = `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+
+      // Format description (truncate if too long)
+      const descriptionShort = row.description && row.description.length > 100 
+        ? row.description.substring(0, 100) + '...' 
+        : row.description;
+
+      // Action button logic
+      const actionButton = row.status === 'pending' 
+        ? { text: 'Đã xử lý', color: 'blue', action: 'resolve' }
+        : { text: 'Mở lại', color: 'orange', action: 'reopen' };
+
+      const formattedReport = {
+        report_id: row.report_id,
+        report_code: row.report_code,
+        station_id: row.station_id,
+        station_name: row.station_name,
+        reporter_id: row.reporter_id,
+        manager_name: row.manager_name,
+        title: row.title,
+        description: row.description,
+        description_short: descriptionShort,
+        image_url: row.image_url,
+        images: imageArray,
+        has_images: imageArray.length > 0,
+        status: row.status,
+        status_label: statusLabel,
+        status_color: statusColor,
+        reported_at: row.reported_at,
+        reported_at_display: reportedAtDisplay,
+        action_button: actionButton
+      };
+
+      return res.json({
+        success: true,
+        message: 'Cập nhật trạng thái báo cáo thành công',
+        data: formattedReport
+      });
+    }
 
     return res.json({
       success: true,

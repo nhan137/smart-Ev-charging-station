@@ -2,9 +2,61 @@ const Booking = require('../models/Booking');
 const User = require('../models/User');
 const Station = require('../models/Station');
 const Payment = require('../models/Payment');
+const ChargingSession = require('../models/ChargingSession');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
+
+// Helper functions for formatting
+const formatVehicleType = (vehicleType) => {
+  const mapping = {
+    'oto_ccs': 'Ô tô CCS',
+    'oto_type2': 'Ô tô Type 2',
+    'xe_may_ccs': 'Xe máy CCS',
+    'xe_may_usb': 'Xe máy USB'
+  };
+  return mapping[vehicleType] || vehicleType;
+};
+
+const formatStatus = (status) => {
+  const mapping = {
+    'pending': 'Chờ xác nhận',
+    'confirmed': 'Đã xác nhận',
+    'charging': 'Đang sạc',
+    'completed': 'Hoàn thành',
+    'cancelled': 'Đã hủy'
+  };
+  return mapping[status] || status;
+};
+
+const formatDateTime = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+};
+
+const formatDate = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+};
+
+const formatCurrency = (amount) => {
+  if (!amount) return null;
+  return `$${parseFloat(amount).toLocaleString('vi-VN')}₫`;
+};
 
 /**
  * Get booking statistics
@@ -21,9 +73,13 @@ exports.getBookingStats = async (req, res, next) => {
       success: true,
       data: {
         total,
+        total_display: `${total} TỔNG BOOKING`,
         pending,
+        pending_display: `${pending} CHỜ XÁC NHẬN`,
         charging,
-        completed
+        charging_display: `${charging} ĐANG SẠC`,
+        completed,
+        completed_display: `${completed} HOÀN THÀNH`
       }
     });
   } catch (error) {
@@ -75,17 +131,27 @@ exports.getBookings = async (req, res, next) => {
       required: true
     };
 
-    // If search is provided, filter by user full_name or booking_id
+    // If search is provided, filter by booking_id, user full_name, or station name
     if (search) {
       const searchNum = parseInt(search);
       if (!isNaN(searchNum) && searchNum.toString() === search.trim()) {
         // Search by booking_id (exact match)
         where.booking_id = searchNum;
       } else {
-        // Search by user full_name
-        userInclude.where = {
-          full_name: { [Op.like]: `%${search}%` }
-        };
+        // Search by user full_name or station name using raw SQL
+        const searchTerm = `%${search}%`;
+        where[Op.or] = [
+          sequelize.literal(`EXISTS (
+            SELECT 1 FROM users 
+            WHERE users.user_id = bookings.user_id 
+            AND users.full_name LIKE ${sequelize.escape(searchTerm)}
+          )`),
+          sequelize.literal(`EXISTS (
+            SELECT 1 FROM stations 
+            WHERE stations.station_id = bookings.station_id 
+            AND stations.station_name LIKE ${sequelize.escape(searchTerm)}
+          )`)
+        ];
       }
     }
 
@@ -119,20 +185,29 @@ exports.getBookings = async (req, res, next) => {
         booking_id: bookingData.booking_id,
         booking_code: `#${bookingData.booking_id}`, // Mã đặt lịch
         user_id: bookingData.user_id,
-        user_name: bookingData.user?.full_name || null,
+        user_name: bookingData.user?.full_name || null, // NGƯỜI ĐẶT
         user_phone: bookingData.user?.phone || null,
         station_id: bookingData.station_id,
-        station_name: bookingData.station?.station_name || null,
+        station_name: bookingData.station?.station_name || null, // TÊN TRẠM
         vehicle_type: bookingData.vehicle_type,
+        vehicle_type_display: formatVehicleType(bookingData.vehicle_type), // LOẠI XE
         start_time: bookingData.start_time,
+        start_time_display: formatDateTime(bookingData.start_time), // THỜI GIAN BẮT ĐẦU
         end_time: bookingData.end_time,
+        end_time_display: formatDateTime(bookingData.end_time),
         actual_start: bookingData.actual_start,
         actual_end: bookingData.actual_end,
         status: bookingData.status,
+        status_label: formatStatus(bookingData.status), // TRẠNG THÁI
         total_cost: bookingData.total_cost,
+        total_cost_display: formatCurrency(bookingData.total_cost), // TỔNG TIỀN
         created_at: bookingData.created_at,
         payment_method: bookingData.payment?.method || null,
-        payment_status: bookingData.payment?.status || null
+        payment_status: bookingData.payment?.status || null,
+        // Action buttons logic (for FE to determine which buttons to show)
+        can_confirm: bookingData.status === 'pending',
+        can_cancel: ['pending', 'confirmed'].includes(bookingData.status),
+        can_view_details: true
       };
     });
 
@@ -191,15 +266,23 @@ exports.getBookingById = async (req, res, next) => {
       });
     }
 
+    // Get ChargingSession if exists
+    const chargingSession = await ChargingSession.findOne({
+      where: { booking_id: booking_id }
+    });
+
     const bookingData = booking.toJSON();
+    const sessionData = chargingSession ? chargingSession.toJSON() : null;
 
     // Format response to match UI modal
     const formattedResponse = {
       booking_info: {
         booking_id: bookingData.booking_id,
-        booking_code: `#${bookingData.booking_id}`,
+        booking_code: `#${bookingData.booking_id}`, // Mã đặt lịch: #3
         status: bookingData.status,
+        status_label: formatStatus(bookingData.status), // Trạng thái: Hoàn thành
         vehicle_type: bookingData.vehicle_type,
+        vehicle_type_display: formatVehicleType(bookingData.vehicle_type), // Loại xe: Xe máy USB
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
         actual_start: bookingData.actual_start,
@@ -209,31 +292,146 @@ exports.getBookingById = async (req, res, next) => {
       },
       customer_info: {
         user_id: bookingData.user_id,
-        full_name: bookingData.user?.full_name || null,
+        full_name: bookingData.user?.full_name || null, // Họ tên: Lê Văn C
         phone: bookingData.user?.phone || null,
         email: bookingData.user?.email || null
       },
       station_info: {
         station_id: bookingData.station_id,
-        station_name: bookingData.station?.station_name || null,
+        station_name: bookingData.station?.station_name || null, // Tên trạm: Trạm sạc Hải Châu
         address: bookingData.station?.address || null
+      },
+      time_info: {
+        start_time: bookingData.actual_start || bookingData.start_time,
+        start_time_display: formatDate(bookingData.actual_start || bookingData.start_time), // Bắt đầu: 16:00:00 19/1/2025
+        end_time: bookingData.actual_end || bookingData.end_time,
+        end_time_display: formatDate(bookingData.actual_end || bookingData.end_time) // Kết thúc: 17:00:00 19/1/2025
+      },
+      charging_info: {
+        start_battery_percent: sessionData?.start_battery_percent || null, // Pin ban đầu: 20%
+        start_battery_display: sessionData?.start_battery_percent ? `${sessionData.start_battery_percent}%` : null,
+        end_battery_percent: sessionData?.end_battery_percent || null, // Pin sau sạc: 85%
+        end_battery_display: sessionData?.end_battery_percent ? `${sessionData.end_battery_percent}%` : null,
+        energy_consumed: sessionData?.energy_consumed || null, // Năng lượng tiêu thụ: 30 kWh
+        energy_consumed_display: sessionData?.energy_consumed ? `${parseFloat(sessionData.energy_consumed)} kWh` : null
       },
       payment_info: {
         payment_id: bookingData.payment?.payment_id || null,
-        method: bookingData.payment?.method || null,
+        method: bookingData.payment?.method || null, // Phương thức: QR
+        method_display: bookingData.payment?.method ? bookingData.payment.method.toUpperCase() : null,
         status: bookingData.payment?.status || null,
-        amount: bookingData.payment?.amount || null,
+        status_label: bookingData.payment?.status === 'success' ? 'Đã thanh toán' : null, // Đã thanh toán
+        amount: bookingData.payment?.amount || bookingData.total_cost || null,
+        amount_display: formatCurrency(bookingData.payment?.amount || bookingData.total_cost), // Tổng tiền: 15,000₫
         payment_date: bookingData.payment?.payment_date || null
       },
       system_info: {
         created_at: bookingData.created_at,
-        updated_at: bookingData.created_at // Assuming no updated_at field
+        created_at_display: formatDate(bookingData.created_at), // Ngày tạo: 14:00:00 18/1/2025
+        updated_at: bookingData.created_at, // Assuming no updated_at field
+        updated_at_display: formatDate(bookingData.created_at) // Cập nhật lần cuối: 17:00:00 19/1/2025
       }
     };
 
     res.status(200).json({
       success: true,
       data: formattedResponse
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Confirm booking
+ * PUT /api/admin/bookings/:booking_id/confirm
+ */
+exports.confirmBooking = async (req, res, next) => {
+  try {
+    const { booking_id } = req.params;
+
+    // Find booking
+    const booking = await Booking.findByPk(booking_id, {
+      include: [{
+        model: Station,
+        as: 'station',
+        attributes: ['station_id', 'available_slots', 'total_slots'],
+        required: true
+      }]
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Check if booking is already confirmed, completed, or cancelled
+    if (booking.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot confirm booking with status '${booking.status}'. Only pending bookings can be confirmed.`
+      });
+    }
+
+    const station = booking.station;
+
+    // Check if station has available slots
+    if (station.available_slots <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Station has no available slots'
+      });
+    }
+
+    // Update booking status to confirmed
+    await booking.update({ status: 'confirmed' });
+
+    // Decrease available_slots (already decreased when booking was created, so no need to decrease again)
+    // Actually, we should not decrease here because it was already decreased when booking was created
+
+    // Get updated booking with relations
+    const updatedBooking = await Booking.findByPk(booking_id, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['user_id', 'full_name', 'phone'],
+          required: true
+        },
+        {
+          model: Station,
+          as: 'station',
+          attributes: ['station_id', 'station_name'],
+          required: true
+        },
+        {
+          model: Payment,
+          as: 'payment',
+          attributes: ['payment_id', 'method', 'status'],
+          required: false
+        }
+      ]
+    });
+
+    const bookingData = updatedBooking.toJSON();
+    const formattedBooking = {
+      booking_id: bookingData.booking_id,
+      booking_code: `#${bookingData.booking_id}`,
+      user_name: bookingData.user?.full_name || null,
+      station_name: bookingData.station?.station_name || null,
+      status: bookingData.status,
+      status_label: formatStatus(bookingData.status),
+      total_cost: bookingData.total_cost,
+      total_cost_display: formatCurrency(bookingData.total_cost),
+      payment_status: bookingData.payment?.status || null
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Booking confirmed successfully',
+      data: formattedBooking
     });
   } catch (error) {
     next(error);
@@ -319,7 +517,9 @@ exports.cancelBooking = async (req, res, next) => {
       user_name: bookingData.user?.full_name || null,
       station_name: bookingData.station?.station_name || null,
       status: bookingData.status,
+      status_label: formatStatus(bookingData.status),
       total_cost: bookingData.total_cost,
+      total_cost_display: formatCurrency(bookingData.total_cost),
       payment_status: bookingData.payment?.status || null
     };
 

@@ -92,6 +92,9 @@ router.get('/bookings', authenticate, authorize('admin'), adminBookingController
 // GET /api/admin/bookings/:booking_id - Get booking by ID
 router.get('/bookings/:booking_id', authenticate, authorize('admin'), adminBookingController.getBookingById);
 
+// PUT /api/admin/bookings/:booking_id/confirm - Confirm booking
+router.put('/bookings/:booking_id/confirm', authenticate, authorize('admin'), adminBookingController.confirmBooking);
+
 // PUT /api/admin/bookings/:booking_id/cancel - Cancel booking
 router.put('/bookings/:booking_id/cancel', authenticate, authorize('admin'), adminBookingController.cancelBooking);
 

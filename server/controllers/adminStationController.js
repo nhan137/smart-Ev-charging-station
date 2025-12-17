@@ -85,11 +85,29 @@ exports.getStations = async (req, res, next) => {
       offset: offset
     });
 
-    // Format response to match UI
+    // Format response để khớp với UI (Hình 1)
+    const typeMap = {
+      'xe_may': 'XE MÁY',
+      'oto': 'Ô TÔ',
+      'ca_hai': 'CẢ HAI'
+    };
+
+    const statusMap = {
+      'active': 'Hoạt động',
+      'maintenance': 'Bảo trì',
+      'inactive': 'Ngừng hoạt động'
+    };
+
     const formattedStations = stations.map(station => {
       const stationData = station.toJSON();
       return {
         ...stationData,
+        station_code: `#${stationData.station_id}`, // ID: #1, #2
+        station_type_label: typeMap[stationData.station_type] || stationData.station_type, // LOẠI TRẠM: CẢ HAI, Ô TÔ, XE MÁY
+        price_display: `$ ${parseFloat(stationData.price_per_kwh || 0).toLocaleString('vi-VN')}₫`, // GIÁ/KWH: $ 3,500₫
+        power_display: stationData.charging_power ? `${parseFloat(stationData.charging_power)} kW` : 'N/A', // CÔNG SUẤT: 50 kW
+        slots_display: `${stationData.available_slots}/${stationData.total_slots}`, // SỐ CHỖ: 3/6
+        status_label: statusMap[stationData.status] || stationData.status, // TRẠNG THÁI: Hoạt động
         manager_name: stationData.manager?.full_name || null,
         manager_email: stationData.manager?.email || null
       };
@@ -253,16 +271,50 @@ exports.getStationById = async (req, res, next) => {
     const totalKwh = parseFloat(kwhResult[0]?.total_kwh || 0);
 
     const stationData = station.toJSON();
+    
+    // Format response để khớp với UI (Hình 3 & Hình 4)
+    const typeMap = {
+      'xe_may': 'XE MÁY',
+      'oto': 'Ô TÔ',
+      'ca_hai': 'CẢ HAI'
+    };
+
+    const statusMap = {
+      'active': 'Hoạt động',
+      'maintenance': 'Bảo trì',
+      'inactive': 'Ngừng hoạt động'
+    };
+
     const formattedStation = {
       ...stationData,
+      station_code: `#${stationData.station_id}`, // ID: #1
+      station_type_label: typeMap[stationData.station_type] || stationData.station_type,
+      price_display: `${parseFloat(stationData.price_per_kwh || 0).toLocaleString('vi-VN')}₫`, // 3,500₫
+      power_display: stationData.charging_power ? `${parseFloat(stationData.charging_power)} kW` : 'N/A', // 50 kW
+      slots_display: `${stationData.available_slots}/${stationData.total_slots} chỗ trống`, // 3/6 chỗ trống
+      status_label: statusMap[stationData.status] || stationData.status,
+      opening_hours_display: stationData.opening_hours || '24/7', // Giờ mở cửa: 24/7
       manager_name: stationData.manager?.full_name || null,
       manager_email: stationData.manager?.email || null,
-      // Statistics
+      // Location (Hình 4)
+      location: {
+        latitude: parseFloat(stationData.latitude || 0),
+        longitude: parseFloat(stationData.longitude || 0),
+        latitude_display: stationData.latitude ? parseFloat(stationData.latitude).toFixed(4) : '0.0000', // 16.0544
+        longitude_display: stationData.longitude ? parseFloat(stationData.longitude).toFixed(4) : '0.0000' // 108.2022
+      },
+      // Statistics (Hình 4)
       statistics: {
-        total_bookings: totalBookings,
-        completed_bookings: completedBookings,
-        total_revenue: totalRevenue,
-        total_kwh_supplied: totalKwh
+        total_bookings: totalBookings, // 250
+        total_bookings_display: totalBookings.toLocaleString('vi-VN'), // "250"
+        completed_bookings: completedBookings, // 230
+        completed_bookings_display: completedBookings.toLocaleString('vi-VN'), // "230"
+        total_revenue: totalRevenue, // 15000000
+        total_revenue_display: totalRevenue >= 1000000 
+          ? `${(totalRevenue / 1000000).toFixed(1)}M` 
+          : `${(totalRevenue / 1000).toFixed(1)}K`, // "15.0M"
+        total_kwh_supplied: totalKwh, // 3500
+        total_kwh_display: totalKwh.toLocaleString('vi-VN') // "3,500"
       }
     };
 
