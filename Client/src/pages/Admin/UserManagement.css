@@ -137,54 +137,26 @@
 }
 
 /* Action Buttons */
-.btn-lock {
-  background: #fef3c7;
-  color: #92400e;
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
 }
 
-.btn-lock:hover {
-  background: #fbbf24;
-  color: white;
+.action-btn-text {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
 }
 
-.btn-unlock {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.btn-unlock:hover {
-  background: #10b981;
-  color: white;
-}
-
-.btn-edit {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.btn-edit:hover {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-permission {
-  background: #e9d5ff;
-  color: #6b21a8;
-}
-
-.btn-permission:hover {
-  background: #a855f7;
-  color: white;
-}
-
-.btn-delete {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.btn-delete:hover {
-  background: #ef4444;
-  color: white;
+.action-btn-text:hover {
+  background: #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 @media (max-width: 768px) {
