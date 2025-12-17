@@ -24,8 +24,14 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// POST /api/reports - User/Manager gửi báo cáo
-router.post('/', authenticate, upload.single('image'), reportController.createReport);
+// POST /api/reports - User/Manager gửi báo cáo sự cố (hỗ trợ tối đa 5 ảnh)
+router.post('/', authenticate, upload.array('images', 5), reportController.createReport);
+
+// GET /api/reports/my - User xem lịch sử báo cáo sự cố của mình
+router.get('/my', authenticate, authorize('user'), reportController.getMyReports);
+
+// GET /api/reports/:report_id - User xem chi tiết 1 báo cáo của mình
+router.get('/:report_id', authenticate, authorize('user'), reportController.getUserReportDetail);
 
 // PUT /api/reports/:report_id/manager/resolve - Manager xử lý xong báo cáo từ User
 router.put(
@@ -41,6 +47,14 @@ router.put(
   authenticate,
   authorize('manager'),
   reportController.managerEscalateReport
+);
+
+// GET /api/reports/manager/inbox - Manager xem hộp thư báo cáo từ User
+router.get(
+  '/manager/inbox',
+  authenticate,
+  authorize('manager'),
+  reportController.getManagerInbox
 );
 
 // GET /api/reports/admin - Admin xem danh sách báo cáo do Manager gửi

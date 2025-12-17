@@ -15,7 +15,7 @@ const pool = mysql.createPool({
 // User -> gửi báo cáo cho Manager trạm
 // Manager -> gửi báo cáo (bảo trì / escalate) cho Admin + (optional) broadcast tới Users
 exports.createReport = async (req, res, next) => {
-  const { station_id, title, description } = req.body;
+  const { station_id, title, description, summary } = req.body;
   let { user_ids } = req.body; // danh sách user muốn gửi (optional)
   const reporterId = req.user?.user_id;
   const reporterRoleId = req.user?.role_id;
@@ -40,8 +40,20 @@ exports.createReport = async (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
 
+  // Gộp tóm tắt + mô tả chi tiết (nếu FE gửi 2 trường riêng)
+  const finalDescription =
+    summary && summary.trim()
+      ? `${summary.trim()}\n\n${description.trim()}`
+      : description.trim();
+
+  // Xử lý multiple images (tối đa 5 ảnh)
   let imageUrl = null;
-  if (req.file) {
+  if (req.files && req.files.length > 0) {
+    const imagePaths = req.files.map(file => `/uploads/reports/${file.filename}`);
+    // Lưu dưới dạng JSON array string
+    imageUrl = JSON.stringify(imagePaths);
+  } else if (req.file) {
+    // Fallback: nếu FE vẫn gửi single file
     imageUrl = `/uploads/reports/${req.file.filename}`;
   }
 
@@ -71,7 +83,7 @@ exports.createReport = async (req, res, next) => {
       `INSERT INTO reports
        (station_id, reporter_id, title, description, image_url, status, reported_at)
        VALUES (?, ?, ?, ?, ?, 'pending', NOW())`,
-      [station_id, reporterId, title, description, imageUrl]
+      [station_id, reporterId, title, finalDescription, imageUrl]
     );
 
     const notifValues = [];
@@ -505,6 +517,207 @@ exports.updateReportStatus = async (req, res, next) => {
     });
   } catch (err) {
     if (conn) await conn.rollback();
+    return next(err);
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
+// GET /api/reports/my
+// User xem lịch sử báo cáo sự cố của chính mình
+exports.getMyReports = async (req, res, next) => {
+  const userId = req.user?.user_id;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+
+    const [rows] = await conn.query(
+      `SELECT
+         r.report_id,
+         CONCAT('REP-', LPAD(r.report_id, 4, '0')) AS report_code,
+         r.station_id,
+         s.station_name,
+         r.title,
+         r.description,
+         r.status,
+         r.reported_at,
+         r.reported_at AS updated_at
+       FROM reports r
+       JOIN stations s ON r.station_id = s.station_id
+       WHERE r.reporter_id = ?
+       ORDER BY r.reported_at DESC`,
+      [userId]
+    );
+
+    return res.json({
+      success: true,
+      data: rows
+    });
+  } catch (err) {
+    return next(err);
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
+// GET /api/reports/:report_id (User)
+// User xem chi tiết 1 báo cáo của mình
+exports.getUserReportDetail = async (req, res, next) => {
+  const userId = req.user?.user_id;
+  const { report_id } = req.params;
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+
+    const [rows] = await conn.query(
+      `SELECT
+         r.report_id,
+         CONCAT('REP-', LPAD(r.report_id, 4, '0')) AS report_code,
+         r.station_id,
+         s.station_name,
+         r.title,
+         r.description,
+         r.image_url,
+         r.status,
+         r.reported_at,
+         COALESCE(r.updated_at, r.reported_at) AS updated_at
+       FROM reports r
+       JOIN stations s ON r.station_id = s.station_id
+       WHERE r.report_id = ?
+         AND r.reporter_id = ?`,
+      [report_id, userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Report not found'
+      });
+    }
+
+    const report = rows[0];
+
+    // Parse image_url: có thể là JSON array string hoặc single URL
+    let images = [];
+    if (report.image_url) {
+      try {
+        // Thử parse JSON array
+        const parsed = JSON.parse(report.image_url);
+        images = Array.isArray(parsed) ? parsed : [parsed];
+      } catch (e) {
+        // Nếu không phải JSON, coi như single URL hoặc comma-separated
+        if (report.image_url.includes(',')) {
+          images = report.image_url.split(',').map(url => url.trim()).filter(url => url);
+        } else {
+          images = [report.image_url];
+        }
+      }
+    }
+
+    // Tạo status_history (timeline)
+    const statusHistory = [
+      {
+        status: 'pending',
+        label: report.status === 'pending' ? 'Đang chờ' : 'Đã xử lý',
+        timestamp: report.reported_at,
+        description: 'Báo cáo đã được tạo'
+      }
+    ];
+
+    // Nếu đã resolved, thêm mốc "Đã xử lý"
+    if (report.status === 'resolved') {
+      statusHistory.push({
+        status: 'resolved',
+        label: 'Đã xử lý',
+        timestamp: report.updated_at,
+        description: 'Báo cáo đã được Quản lý xử lý'
+      });
+    }
+
+    // Format response
+    const response = {
+      report_id: report.report_id,
+      report_code: report.report_code,
+      station_id: report.station_id,
+      station_name: report.station_name,
+      title: report.title,
+      description: report.description,
+      images: images, // Array of image URLs
+      status: report.status,
+      status_label: report.status === 'pending' ? 'Đang chờ' : 'Đã xử lý',
+      reported_at: report.reported_at,
+      updated_at: report.updated_at,
+      status_history: statusHistory
+    };
+
+    return res.json({
+      success: true,
+      data: response
+    });
+  } catch (err) {
+    return next(err);
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
+// GET /api/reports/manager/inbox
+// Manager xem danh sách báo cáo từ User tại các trạm mình quản lý
+exports.getManagerInbox = async (req, res, next) => {
+  const managerId = req.user?.user_id;
+  const { station_id, status } = req.query;
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+
+    const whereClauses = [
+      's.manager_id = ?',
+      'u.role_id = 1' // chỉ lấy báo cáo do User gửi
+    ];
+    const params = [managerId];
+
+    if (station_id) {
+      whereClauses.push('r.station_id = ?');
+      params.push(station_id);
+    }
+
+    if (status && ['pending', 'resolved'].includes(status)) {
+      whereClauses.push('r.status = ?');
+      params.push(status);
+    }
+
+    const [rows] = await conn.query(
+      `SELECT
+         r.report_id,
+         CONCAT('REP-', LPAD(r.report_id, 4, '0')) AS report_code,
+         u.full_name AS reporter_name,
+         r.station_id,
+         s.station_name,
+         r.title,
+         r.description,
+         r.status,
+         r.reported_at,
+         r.reported_at AS updated_at
+       FROM reports r
+       JOIN stations s ON r.station_id = s.station_id
+       JOIN users u ON r.reporter_id = u.user_id
+       WHERE ${whereClauses.join(' AND ')}
+       ORDER BY r.reported_at DESC`,
+      params
+    );
+
+    return res.json({
+      success: true,
+      data: rows
+    });
+  } catch (err) {
     return next(err);
   } finally {
     if (conn) conn.release();
