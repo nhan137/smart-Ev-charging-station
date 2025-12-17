@@ -57,6 +57,14 @@ router.get(
   reportController.getManagerInbox
 );
 
+// GET /api/reports/manager/history - Manager xem lịch sử báo cáo đã gửi lên Admin
+router.get(
+  '/manager/history',
+  authenticate,
+  authorize('manager'),
+  reportController.getManagerHistory
+);
+
 // GET /api/reports/admin - Admin xem danh sách báo cáo do Manager gửi
 router.get(
   '/admin',

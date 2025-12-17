@@ -402,6 +402,47 @@ exports.managerEscalateReport = async (req, res, next) => {
   }
 };
 
+// GET /api/reports/manager/history
+// Manager xem lịch sử báo cáo đã gửi lên Admin
+exports.getManagerHistory = async (req, res, next) => {
+  const managerId = req.user?.user_id;
+
+  if (!managerId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+
+    const [rows] = await conn.query(
+      `SELECT
+         r.report_id,
+         CONCAT('MREP-', LPAD(r.report_id, 4, '0')) AS report_code,
+         r.station_id,
+         s.station_name,
+         r.title,
+         r.status,
+         r.reported_at
+       FROM reports r
+       JOIN stations s ON r.station_id = s.station_id
+       WHERE r.reporter_id = ?
+         AND r.reporter_id IN (SELECT user_id FROM users WHERE role_id = 2)
+       ORDER BY r.reported_at DESC`,
+      [managerId]
+    );
+
+    return res.json({
+      success: true,
+      data: rows
+    });
+  } catch (err) {
+    return next(err);
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
 // GET /api/reports/admin
 // Admin xem danh sách báo cáo do Manager gửi lên (role_id = 2), sắp xếp mới nhất trước
 exports.getReportsForAdmin = async (req, res, next) => {
@@ -410,17 +451,19 @@ exports.getReportsForAdmin = async (req, res, next) => {
     conn = await pool.getConnection();
 
     const [rows] = await conn.query(
-      `SELECT r.report_id,
-              r.station_id,
-              s.station_name,
-              r.reporter_id,
-              u.full_name AS reporter_name,
-              u.role_id    AS reporter_role_id,
-              r.title,
-              r.description,
-              r.image_url,
-              r.status,
-              r.reported_at
+      `SELECT 
+         r.report_id,
+         CONCAT('MREP-', LPAD(r.report_id, 4, '0')) AS report_code,
+         r.station_id,
+         s.station_name,
+         r.reporter_id,
+         u.full_name AS manager_name,
+         u.role_id    AS reporter_role_id,
+         r.title,
+         r.description,
+         r.image_url,
+         r.status,
+         r.reported_at
        FROM reports r
        JOIN stations s ON r.station_id = s.station_id
        JOIN users u ON r.reporter_id = u.user_id
@@ -491,15 +534,26 @@ exports.updateReportStatus = async (req, res, next) => {
       });
     }
 
-    await conn.query('UPDATE reports SET status = ? WHERE report_id = ?', [
+    await conn.query('UPDATE reports SET status = ?, updated_at = NOW() WHERE report_id = ?', [
       status,
       report_id
     ]);
 
-    // Nếu admin đánh dấu 'resolved' -> gửi thông báo cho người báo cáo
+    // Gửi thông báo cho Manager khi admin thay đổi trạng thái
     if (status === 'resolved') {
       const notifTitle = 'Báo cáo sự cố đã được xử lý';
       const notifMessage = `Báo cáo của bạn về trạm ${report.station_name} đã được admin xử lý.`;
+
+      await conn.query(
+        `INSERT INTO notifications
+         (user_id, title, message, type, status, created_at)
+         VALUES (?, ?, ?, 'system', 'unread', NOW())`,
+        [report.reporter_id, notifTitle, notifMessage]
+      );
+    } else if (status === 'pending' && report.old_status === 'resolved') {
+      // Admin mở lại báo cáo (resolved -> pending)
+      const notifTitle = 'Báo cáo sự cố đã được mở lại';
+      const notifMessage = `Báo cáo của bạn về trạm ${report.station_name} đã được admin mở lại để xử lý tiếp.`;
 
       await conn.query(
         `INSERT INTO notifications
