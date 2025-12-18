@@ -1,0 +1,76 @@
+.station-detail-modal-admin {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  background: white;
+  border-radius: 24px;
+  padding: 2.5rem;
+  animation: slideUp 0.3s ease;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+}
+
+.station-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.station-header-info {
+  flex: 1;
+}
+
+.station-header-info h2 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 0.75rem;
+}
+
+.station-badges {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.station-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+  .station-detail-modal-admin {
+    padding: 2rem 1.5rem;
+    max-height: 95vh;
+  }
+
+  .modal-header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .station-icon {
+    margin: 0 auto;
+  }
+
+  .station-badges {
+    justify-content: center;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

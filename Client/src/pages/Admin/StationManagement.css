@@ -1,0 +1,158 @@
+.station-management {
+  max-width: 1600px;
+}
+
+.page-header-admin {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.btn-add-station {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-station:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+}
+
+/* Station Name Cell */
+.station-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.station-name-cell svg {
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.address-cell {
+  max-width: 300px;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+/* Type Badges */
+.type-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.type-bike {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.type-car {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.type-both {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+/* Power Cell */
+.power-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+.power-cell svg {
+  color: #fbbf24;
+}
+
+/* Slots Cell */
+.slots-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 700;
+}
+
+.slots-cell .available {
+  color: #10b981;
+  font-size: 1.1rem;
+}
+
+.slots-cell .separator {
+  color: #cbd5e1;
+}
+
+.slots-cell .total {
+  color: #64748b;
+}
+
+/* Status Badges */
+.status-maintenance {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-inactive {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn-text {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.action-btn-text:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+@media (max-width: 768px) {
+  .page-header-admin {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .btn-add-station {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .address-cell {
+    max-width: 200px;
+  }
+}
