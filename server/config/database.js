@@ -12,6 +12,7 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 3306,
     dialect: 'mysql',
+    timezone: '+07:00', // Set timezone to GMT+7 (Vietnam)
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: {
       max: 5,

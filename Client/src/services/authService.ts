@@ -1,76 +1,50 @@
-import { mockUsers, getNextId } from './mockData';
-
-// Mock mode - set to false to use real API
-const USE_MOCK = true;
+import api from './api';
 
 export const authService = {
   login: async (email: string, password: string) => {
-    if (USE_MOCK) {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const response = await api.post('/auth/login', { email, password });
       
-      const user = mockUsers.find(u => u.email === email && u.password === password);
-      if (!user) {
-        throw new Error('Email hoặc mật khẩu không đúng');
+      if (response.data.success && response.data.data.token) {
+        const { token, user } = response.data.data;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        return { token, user };
       }
       
-      const token = 'mock-token-' + Date.now();
-      const userData = { ...user };
-      delete (userData as any).password;
-      
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      return { token, user: userData };
+      throw new Error(response.data.message || 'Đăng nhập thất bại');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error('Email hoặc mật khẩu không đúng');
     }
-    
-    // Real API call (commented out for mock mode)
-    // const response = await api.post('/auth/login', { email, password });
-    // if (response.data.token) {
-    //   localStorage.setItem('token', response.data.token);
-    //   localStorage.setItem('user', JSON.stringify(response.data.user));
-    // }
-    // return response.data;
   },
 
   register: async (data: { email: string; password: string; full_name: string; phone?: string }) => {
-    if (USE_MOCK) {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Check if email already exists
-      if (mockUsers.find(u => u.email === data.email)) {
-        throw new Error('Email đã được sử dụng');
-      }
-      
-      const newUser = {
-        user_id: getNextId(mockUsers, 'user_id'),
+    try {
+      const response = await api.post('/auth/register', {
+        full_name: data.full_name,
         email: data.email,
         password: data.password,
-        full_name: data.full_name,
-        phone: data.phone || '',
-        role: 'user'
-      };
+        phone: data.phone || null,
+        role_id: 1
+      });
       
-      mockUsers.push(newUser);
+      if (response.data.success && response.data.data.token) {
+        const { token, user } = response.data.data;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        return { token, user };
+      }
       
-      const token = 'mock-token-' + Date.now();
-      const userData = { ...newUser };
-      delete (userData as any).password;
-      
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      return { token, user: userData };
+      throw new Error(response.data.message || 'Đăng ký thất bại');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error('Đã xảy ra lỗi khi đăng ký. Vui lòng thử lại.');
     }
-    
-    // Real API call (commented out for mock mode)
-    // const response = await api.post('/auth/register', { ...data, role_id: 1 });
-    // if (response.data.token) {
-    //   localStorage.setItem('token', response.data.token);
-    //   localStorage.setItem('user', JSON.stringify(response.data.user));
-    // }
-    // return response.data;
   },
 
   logout: () => {
