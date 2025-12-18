@@ -93,9 +93,18 @@ export const authService = {
     }
   },
 
-  logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  logout: async () => {
+    try {
+      // Call backend API to logout (for future token blacklist implementation)
+      await api.post('/auth/logout');
+    } catch (error) {
+      // Continue logout even if API fails
+      console.error('Logout API error:', error);
+    } finally {
+      // Always clear local storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
   },
 
   getCurrentUser: () => {

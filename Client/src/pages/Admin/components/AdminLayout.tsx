@@ -1,14 +1,14 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Shield, Users, Building2, LogOut, Calendar, DollarSign, LayoutDashboard, Bell, FileText } from 'lucide-react';
+import { authService } from '../../../services/authService';
 import './AdminLayout.css';
 
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await authService.logout();
     navigate('/');
     window.location.reload();
   };

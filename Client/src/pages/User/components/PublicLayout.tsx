@@ -74,8 +74,8 @@ const PublicLayout = () => {
 
   /* ---------------- Handlers ---------------- */
 
-  const handleLogout = () => {
-    authService.logout();
+  const handleLogout = async () => {
+    await authService.logout();
     setShowUserDropdown(false);
     navigate('/');
     window.location.reload();
