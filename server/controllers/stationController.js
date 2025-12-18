@@ -184,6 +184,9 @@ exports.getAllStations = async (req, res, next) => {
         type: Sequelize.QueryTypes.SELECT
       });
 
+      // DISABLE auto-expand radius - show exact results within user's selected radius
+      // If no stations found, return empty array
+      /*
       // Giải pháp 1+2: Nếu không có kết quả trong radius, tự động mở rộng
       // Nếu không có kết quả trong radius ban đầu
       if (stations.length === 0) {
@@ -284,6 +287,7 @@ exports.getAllStations = async (req, res, next) => {
           });
         }
       }
+      */
     } else {
       // Use Sequelize for simpler queries
       stations = await Station.findAll(queryOptions);

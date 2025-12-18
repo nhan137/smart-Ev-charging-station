@@ -19,33 +19,70 @@ const StationMap = () => {
   }>({
     min_price: 0,
     max_price: 10000,
-    distance: 50
+    distance: 1
   });
   const [loading, setLoading] = useState(true);
   const [selectedStation, setSelectedStation] = useState<any | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [mapCenter, setMapCenter] = useState<string>('Đà Nẵng, Việt Nam');
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Get user location on mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          console.log('📍 User location detected:', location);
+          setUserLocation(location);
+        },
+        (error) => {
+          console.error('❌ Error getting location:', error);
+          alert('Không thể lấy vị trí của bạn. Vui lòng bật GPS và cho phép trình duyệt truy cập vị trí.');
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    } else {
+      alert('Trình duyệt của bạn không hỗ trợ GPS');
+    }
+  }, []);
 
   useEffect(() => {
     loadStations();
-  }, [filters]);
+  }, [filters, userLocation]);
 
   const loadStations = async () => {
     try {
       setLoading(true);
-      const response = await stationService.getAllStations();
-      let stationsList = response.data || [];
       
-      // Apply filters
-      if (filters.station_type) {
-        stationsList = stationsList.filter((s: any) => s.station_type === filters.station_type);
-      }
-      if (filters.max_price) {
-        stationsList = stationsList.filter((s: any) => s.price_per_kwh <= filters.max_price);
-      }
+      // Debug: Log user location and filters
+      console.log('🔍 Loading stations with:', {
+        userLocation,
+        filters,
+        hasLocation: !!userLocation
+      });
       
-      setStations(stationsList);
+      // Call API with filters and user location
+      const response = await stationService.getAllStations({
+        station_type: filters.station_type,
+        min_price: filters.min_price,
+        max_price: filters.max_price,
+        radius: filters.distance,
+        lat: userLocation?.lat,
+        lng: userLocation?.lng
+      });
+      
+      console.log('✅ Stations loaded:', response.data?.length || 0);
+      setStations(response.data || []);
     } catch (error) {
-      console.error('Error loading stations:', error);
+      console.error('❌ Error loading stations:', error);
       setStations([]);
     } finally {
       setLoading(false);
@@ -150,6 +187,14 @@ const StationMap = () => {
                   <div 
                     key={station.station_id} 
                     className="station-card"
+                    onClick={() => {
+                      // Use exact GPS coordinates for map marker
+                      if (station.latitude && station.longitude) {
+                        setMapCenter(`${station.latitude},${station.longitude}`);
+                      } else {
+                        setMapCenter(station.address);
+                      }
+                    }}
                   >
                     <img 
                       src={station.avatar_url || 'https://via.placeholder.com/300x120/3b82f6/ffffff?text=EV+Station'} 
@@ -231,13 +276,14 @@ const StationMap = () => {
         <div className="map-area">
           <div className="map-wrapper">
             <iframe
+              key={mapCenter}
               width="100%"
               height="100%"
               style={{ border: 0 }}
               loading="lazy"
               allowFullScreen
               referrerPolicy="no-referrer-when-downgrade"
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d122788.3984457253!2d108.14262!3d16.0544!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x314219c792252a13%3A0x1df0cb4b86727e06!2zxJDDoCBO4bq1bmcsIFZp4buHdCBOYW0!5e0!3m2!1svi!2s!4v1234567890123!5m2!1svi!2s"
+              src={`https://www.google.com/maps?q=${encodeURIComponent(mapCenter)}&output=embed&z=15`}
             />
           </div>
         </div>
