@@ -61,10 +61,10 @@ const LoginModal = ({ isOpen, onClose, onSwitchToRegister }: LoginModalProps) =>
       const result = await authService.login(email, password);
       onClose();
       
-      // Redirect based on role
-      if (result.user.role === 'admin') {
+      // Redirect based on role_id (1=User, 2=Manager, 3=Admin)
+      if (result.user.role_id === 3) {
         window.location.href = '/admin/dashboard';
-      } else if (result.user.role === 'manager') {
+      } else if (result.user.role_id === 2) {
         window.location.href = '/manager/dashboard';
       } else {
         window.location.href = '/';
