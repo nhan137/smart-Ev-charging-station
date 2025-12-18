@@ -15,6 +15,9 @@ import UserReportForm from './pages/User/Stations/UserReportForm';
 import UserReportHistory from './pages/User/Reports/UserReportHistory';
 import PublicLayout from './pages/User/components/PublicLayout';
 
+/* Auth Pages */
+import ResetPassword from './pages/Auth/ResetPassword';
+
 /* Manager Pages */
 import ManagerLayout from './pages/Manager/components/ManagerLayout';
 import ManagerStationList from './pages/Manager/StationList';
@@ -45,6 +48,9 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+
+        {/* Auth Routes (standalone, no layout) */}
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Public Routes */}
         <Route path="/" element={<PublicLayout />}>

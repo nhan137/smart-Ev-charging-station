@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Mail, ArrowLeft, CheckCircle } from 'lucide-react';
+import { authService } from '../../services/authService';
 import './ForgotPasswordModal.css';
 
 interface ForgotPasswordModalProps {
@@ -20,12 +21,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onBackToLogin }: ForgotPasswordM
     setLoading(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // TODO: Call API to send reset password email
-      // await authService.forgotPassword(email);
-      
+      await authService.forgotPassword(email);
       setSuccess(true);
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra. Vui lòng thử lại.');

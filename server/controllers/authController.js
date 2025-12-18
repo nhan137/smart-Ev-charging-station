@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 const { generateToken } = require('../middleware/auth');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
+const { sendPasswordResetEmail } = require('../utils/emailService');
 
 /**
  * Register new user
@@ -348,13 +349,20 @@ exports.forgotPassword = async (req, res, next) => {
     });
 
     // Generate reset URL
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
 
-    // TODO: Send email with reset link
-    // For now, log to console (in production, use nodemailer or similar)
+    // Send email with reset link
+    try {
+      await sendPasswordResetEmail(user.email, resetUrl, user.full_name);
+      console.log('✅ Password reset email sent to:', user.email);
+    } catch (emailError) {
+      console.error('❌ Failed to send email:', emailError.message);
+      // Continue anyway - don't expose email sending failure to user
+    }
+
+    // Always log to console for development
     console.log('=== PASSWORD RESET EMAIL ===');
     console.log(`To: ${user.email}`);
-    console.log(`Subject: Đặt lại mật khẩu - Smart EV Charging Station`);
     console.log(`Reset Link: ${resetUrl}`);
     console.log('============================');
 

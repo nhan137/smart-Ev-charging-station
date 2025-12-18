@@ -47,6 +47,52 @@ export const authService = {
     }
   },
 
+  forgotPassword: async (email: string) => {
+    try {
+      const response = await api.post('/auth/forgot-password', { email });
+      
+      if (response.data.success) {
+        return {
+          success: true,
+          message: response.data.message,
+          // In development mode, backend returns resetUrl and token
+          resetUrl: response.data.resetUrl,
+          token: response.data.token
+        };
+      }
+      
+      throw new Error(response.data.message || 'Không thể gửi email đặt lại mật khẩu');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error('Có lỗi xảy ra. Vui lòng thử lại.');
+    }
+  },
+
+  resetPassword: async (token: string, newPassword: string) => {
+    try {
+      const response = await api.post('/auth/reset-password', { 
+        token, 
+        newPassword 
+      });
+      
+      if (response.data.success) {
+        return {
+          success: true,
+          message: response.data.message
+        };
+      }
+      
+      throw new Error(response.data.message || 'Không thể đặt lại mật khẩu');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error('Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.');
+    }
+  },
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
