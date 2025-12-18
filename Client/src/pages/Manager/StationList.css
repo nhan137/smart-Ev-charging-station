@@ -166,46 +166,27 @@
   color: #991b1b;
 }
 
-.action-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: none;
+.action-buttons {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  gap: 0.5rem;
+}
+
+.action-btn-text {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  background: #f1f5f9;
+  color: #475569;
+  white-space: nowrap;
 }
 
-.btn-detail {
-  background: #f3e8ff;
-  color: #6b21a8;
-}
-
-.btn-detail:hover {
-  background: #8b5cf6;
-  color: white;
-}
-
-.btn-view {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.btn-view:hover {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-edit {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.btn-edit:hover {
-  background: #f59e0b;
-  color: white;
+.action-btn-text:hover {
+  background: #e2e8f0;
+  color: #1e293b;
 }
 
 .empty-row {

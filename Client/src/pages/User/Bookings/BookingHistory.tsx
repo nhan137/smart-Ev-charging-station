@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Filter, Calendar, Eye, X, MapPin, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Filter, Calendar, Eye, X, MapPin, Clock, Lock } from 'lucide-react';
 import ConfirmModal from '../../../components/shared/ConfirmModal';
 import AlertModal from '../../../components/shared/AlertModal';
 import { bookingService } from '../../../services/bookingService';
+import { verifyConfirmationCode } from '../../../services/emailService';
 import './BookingHistory.css';
 
 const BookingHistory = () => {
+  const navigate = useNavigate();
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -23,9 +26,18 @@ const BookingHistory = () => {
     message: '',
     type: 'success'
   });
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [selectedBookingForCode, setSelectedBookingForCode] = useState<any>(null);
+  const [confirmationCode, setConfirmationCode] = useState('');
 
   const [bookings, setBookings] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    document.body.classList.add('booking-history-page');
+    return () => {
+      document.body.classList.remove('booking-history-page');
+    };
+  }, []);
 
   useEffect(() => {
     loadBookings();
@@ -33,13 +45,10 @@ const BookingHistory = () => {
 
   const loadBookings = async () => {
     try {
-      setLoading(true);
       const response = await bookingService.getMyBookings();
       setBookings(response.data || []);
     } catch (error) {
       console.error('Error loading bookings:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -71,6 +80,53 @@ const BookingHistory = () => {
   const handleViewDetail = (booking: any) => {
     setSelectedBooking(booking);
     setShowDetailModal(true);
+  };
+
+  // Handle start charging with code
+  const handleStartCharging = (booking: any) => {
+    setSelectedBookingForCode(booking);
+    setConfirmationCode('');
+    setShowCodeModal(true);
+  };
+
+  // Handle verify code
+  const handleVerifyCode = async () => {
+    if (!selectedBookingForCode || !confirmationCode) {
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: 'Vui lòng nhập mã xác nhận',
+        type: 'error'
+      });
+      return;
+    }
+
+    try {
+      const isValid = verifyConfirmationCode(selectedBookingForCode.booking_id, confirmationCode);
+      
+      if (isValid) {
+        setShowCodeModal(false);
+        setConfirmationCode('');
+        setSelectedBookingForCode(null);
+        
+        // Chuyển hướng đến trang sạc ngay lập tức
+        navigate(`/bookings/${selectedBookingForCode.booking_id}/charging`);
+      } else {
+        setAlertModal({
+          show: true,
+          title: 'Lỗi',
+          message: 'Mã xác nhận không đúng hoặc đã hết hạn. Vui lòng thử lại.',
+          type: 'error'
+        });
+      }
+    } catch (error: any) {
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Có lỗi xảy ra',
+        type: 'error'
+      });
+    }
   };
 
   // Handle cancel booking
@@ -237,6 +293,15 @@ const BookingHistory = () => {
                 </div>
 
                 <div className="booking-actions">
+                  {booking.status === 'confirmed' && (
+                    <button 
+                      className="action-btn action-btn-start-charging"
+                      onClick={() => handleStartCharging(booking)}
+                    >
+                      <Lock size={18} />
+                      <span>Nhập mã để bắt đầu sạc</span>
+                    </button>
+                  )}
                   {(booking.status === 'confirmed' || booking.status === 'pending') && (
                     <button 
                       className="action-btn action-btn-cancel"
@@ -340,6 +405,50 @@ const BookingHistory = () => {
         cancelText="Giữ lại"
         type="danger"
       />
+
+      {/* Code Input Modal */}
+      {showCodeModal && selectedBookingForCode && (
+        <div className="code-modal-overlay" onClick={() => setShowCodeModal(false)}>
+          <div className="code-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowCodeModal(false)}>
+              <X size={24} />
+            </button>
+
+            <h2>Nhập mã để bắt đầu sạc</h2>
+            <p className="modal-subtitle">Booking #{selectedBookingForCode.booking_id} - {selectedBookingForCode.station_name}</p>
+
+            <div className="code-input-section">
+              <label>Mã xác nhận (kí tự và số)</label>
+              <input
+                type="text"
+                maxLength={6}
+                placeholder="000000"
+                value={confirmationCode}
+                onChange={(e) => setConfirmationCode(e.target.value.replace(/\D/g, ''))}
+                className="code-input"
+                autoFocus
+              />
+              <p className="code-hint">Mã xác nhận đã được gửi đến email của bạn</p>
+            </div>
+
+            <div className="modal-actions">
+              <button 
+                className="btn-cancel"
+                onClick={() => setShowCodeModal(false)}
+              >
+                Hủy
+              </button>
+              <button 
+                className="btn-confirm"
+                onClick={handleVerifyCode}
+                disabled={confirmationCode.length !== 6}
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Alert Modal */}
       <AlertModal

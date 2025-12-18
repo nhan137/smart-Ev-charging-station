@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Filter, Calendar, Download, Eye, X } from 'lucide-react';
+import { Filter, Calendar, Eye, X } from 'lucide-react';
 import './ChargingAndPayment.css';
 
 const ChargingAndPayment = () => {
@@ -107,11 +107,6 @@ const ChargingAndPayment = () => {
     
     const config = statusConfig[type][status] || { label: status, class: '' };
     return <span className={`status-badge ${config.class}`}>{config.label}</span>;
-  };
-
-  // Handle print invoice
-  const handlePrintInvoice = (booking: any) => {
-    alert(`In hóa đơn #${booking.booking_id}\n(Tính năng đang được phát triển)`);
   };
 
   // Handle view detail
@@ -267,13 +262,6 @@ const ChargingAndPayment = () => {
                   >
                     <Eye size={18} />
                     <span>Chi tiết</span>
-                  </button>
-                  <button 
-                    className="action-btn action-btn-print"
-                    onClick={() => handlePrintInvoice(booking)}
-                  >
-                    <Download size={18} />
-                    <span>In hóa đơn</span>
                   </button>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Filter, Search, DollarSign, Download, Eye, CreditCard, TrendingUp } from 'lucide-react';
+import { Filter, Search, DollarSign, Download, CreditCard, TrendingUp } from 'lucide-react';
 import { mockStations } from '../../services/mockData';
 import AlertModal from '../../components/shared/AlertModal';
 import './PaymentManagement.css';
@@ -369,11 +369,10 @@ const PaymentManagement = () => {
                   </td>
                   <td>
                     <button
-                      className="action-btn btn-view"
+                      className="action-btn-text"
                       onClick={() => setDetailModal({ show: true, payment })}
-                      title="Chi tiết"
                     >
-                      <Eye size={16} />
+                      Xem chi tiết
                     </button>
                   </td>
                 </tr>

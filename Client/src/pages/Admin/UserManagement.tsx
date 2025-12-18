@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Filter, Lock, Unlock, Edit, Trash2, Shield, Search, Eye, UserPlus } from 'lucide-react';
+import { Filter, Lock, Unlock, Edit, Trash2, Search, Eye, UserPlus } from 'lucide-react';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
-import AssignRoleModal from './components/AssignRoleModal';
 import UserDetailModal from './components/UserDetailModal';
 import EditUserModal from './components/EditUserModal';
 import CreateUserModal from './components/CreateUserModal';
@@ -36,13 +35,6 @@ const UserManagement = () => {
     title: '',
     message: '',
     type: 'success' as 'success' | 'error' | 'info'
-  });
-  const [assignRoleModal, setAssignRoleModal] = useState<{
-    show: boolean;
-    user: User | null;
-  }>({
-    show: false,
-    user: null
   });
   const [detailModal, setDetailModal] = useState<{
     show: boolean;
@@ -215,43 +207,6 @@ const UserManagement = () => {
     });
   };
 
-  const handleAssignRole = (user: User) => {
-    setAssignRoleModal({
-      show: true,
-      user: user
-    });
-  };
-
-  const handleConfirmAssignRole = async (newRole: string) => {
-    if (!assignRoleModal.user) return;
-
-    try {
-      // TODO: Call API
-      // await userService.updateRole(assignRoleModal.user.user_id, newRole);
-      
-      const roleNames: any = {
-        'user': 'User',
-        'manager': 'Manager',
-        'admin': 'Admin'
-      };
-
-      setAlertModal({
-        show: true,
-        title: 'Thành công!',
-        message: `Đã cập nhật vai trò của ${assignRoleModal.user.full_name} thành ${roleNames[newRole]}`,
-        type: 'success'
-      });
-      loadUsers();
-    } catch (error: any) {
-      setAlertModal({
-        show: true,
-        title: 'Lỗi',
-        message: error.message || 'Có lỗi xảy ra',
-        type: 'error'
-      });
-    }
-  };
-
   const handleEditUser = async (data: any) => {
     if (!editModal.user) return;
 
@@ -410,49 +365,37 @@ const UserManagement = () => {
                 <td>
                   <div className="action-buttons">
                     <button
-                      className="action-btn btn-view"
-                      onClick={() => setDetailModal({ show: true, user })}
-                      title="Xem chi tiết"
+                      className="action-btn-text btn-edit"
+                      onClick={() => setEditModal({ show: true, user })}
                     >
-                      <Eye size={16} />
+                      Sửa
+                    </button>
+                    <button
+                      className="action-btn-text btn-view"
+                      onClick={() => setDetailModal({ show: true, user })}
+                    >
+                      Chi tiết
                     </button>
                     {user.status === 'active' ? (
                       <button
-                        className="action-btn btn-lock"
+                        className="action-btn-text btn-lock"
                         onClick={() => handleLockUser(user)}
-                        title="Khóa"
                       >
-                        <Lock size={16} />
+                        Khóa
                       </button>
                     ) : (
                       <button
-                        className="action-btn btn-unlock"
+                        className="action-btn-text btn-unlock"
                         onClick={() => handleUnlockUser(user)}
-                        title="Mở khóa"
                       >
-                        <Unlock size={16} />
+                        Mở khóa
                       </button>
                     )}
                     <button
-                      className="action-btn btn-edit"
-                      onClick={() => setEditModal({ show: true, user })}
-                      title="Chỉnh sửa"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      className="action-btn btn-permission"
-                      onClick={() => handleAssignRole(user)}
-                      title="Phân quyền"
-                    >
-                      <Shield size={16} />
-                    </button>
-                    <button
-                      className="action-btn btn-delete"
+                      className="action-btn-text btn-delete"
                       onClick={() => handleDeleteUser(user)}
-                      title="Xóa"
                     >
-                      <Trash2 size={16} />
+                      Xóa
                     </button>
                   </div>
                 </td>
@@ -484,14 +427,6 @@ const UserManagement = () => {
         type={alertModal.type}
       />
 
-      {/* Assign Role Modal */}
-      <AssignRoleModal
-        isOpen={assignRoleModal.show}
-        onClose={() => setAssignRoleModal({ show: false, user: null })}
-        onConfirm={handleConfirmAssignRole}
-        user={assignRoleModal.user}
-      />
-
       {/* User Detail Modal */}
       <UserDetailModal
         isOpen={detailModal.show}
@@ -503,7 +438,7 @@ const UserManagement = () => {
       <EditUserModal
         isOpen={editModal.show}
         onClose={() => setEditModal({ show: false, user: null })}
-        onSubmit={handleEditUser}
+        onUpdate={(userId, data) => handleEditUser(data)}
         user={editModal.user}
       />
 
@@ -511,7 +446,7 @@ const UserManagement = () => {
       <CreateUserModal
         isOpen={createModal}
         onClose={() => setCreateModal(false)}
-        onSubmit={handleCreateUser}
+        onCreate={handleCreateUser}
       />
     </div>
   );

@@ -1,21 +1,17 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, User, Car, Clock, DollarSign, Filter } from 'lucide-react';
-import { mockStations } from '../../services/mockData';
+import { Calendar, User, Car, Clock, DollarSign, Filter, MapPin, Search } from 'lucide-react';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
 import { generateConfirmationCode, saveConfirmationCode } from '../../services/emailService';
 import { sendBookingConfirmationNotification } from '../../services/notificationService';
-import './StationBookings.css';
+import './BookingHistory.css';
 
-const StationBookings = () => {
-  const { station_id } = useParams();
-  const navigate = useNavigate();
-  const [station, setStation] = useState<any>(null);
+const BookingHistory = () => {
   const [bookings, setBookings] = useState<any[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: string; bookingId: number } | null>(null);
   const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
@@ -27,31 +23,27 @@ const StationBookings = () => {
 
   useEffect(() => {
     loadData();
-  }, [station_id]);
+  }, []);
 
   const loadData = () => {
-    // Load station
-    const foundStation = mockStations.find(s => s.station_id === Number(station_id));
-    setStation(foundStation);
-
-    // Mock bookings data
+    // Mock bookings data - tất cả booking từ các trạm manager quản lý
     const mockBookings = [
       {
         booking_id: 1,
-        user_id: 1,
         user_name: 'Nguyễn Văn A',
         user_email: 'nguyenvana@email.com',
+        station_name: 'Trạm sạc Quận 1',
         vehicle_type: 'oto_ccs',
         start_time: '2025-01-20T14:00:00',
         end_time: '2025-01-20T16:00:00',
-        status: 'pending',
+        status: 'completed',
         total_cost: 105000
       },
       {
         booking_id: 2,
-        user_id: 1,
         user_name: 'Trần Thị B',
         user_email: 'tranthib@email.com',
+        station_name: 'Trạm sạc Quận 3',
         vehicle_type: 'xe_may_ccs',
         start_time: '2025-01-21T09:00:00',
         end_time: '2025-01-21T10:00:00',
@@ -60,14 +52,47 @@ const StationBookings = () => {
       },
       {
         booking_id: 3,
-        user_id: 1,
         user_name: 'Lê Văn C',
         user_email: 'levanc@email.com',
+        station_name: 'Trạm sạc Quận 7',
         vehicle_type: 'xe_may_usb',
         start_time: '2025-01-19T16:00:00',
         end_time: '2025-01-19T17:00:00',
         status: 'completed',
         total_cost: 15000
+      },
+      {
+        booking_id: 4,
+        user_name: 'Phạm Thị D',
+        user_email: 'phamthid@email.com',
+        station_name: 'Trạm sạc Quận 1',
+        vehicle_type: 'oto_ccs',
+        start_time: '2025-01-22T10:00:00',
+        end_time: '2025-01-22T12:00:00',
+        status: 'pending',
+        total_cost: 120000
+      },
+      {
+        booking_id: 5,
+        user_name: 'Hoàng Văn E',
+        user_email: 'hoangvane@email.com',
+        station_name: 'Trạm sạc Quận 3',
+        vehicle_type: 'xe_may_ccs',
+        start_time: '2025-01-18T08:00:00',
+        end_time: '2025-01-18T09:30:00',
+        status: 'cancelled',
+        total_cost: 45000
+      },
+      {
+        booking_id: 6,
+        user_name: 'Nguyễn Thị F',
+        user_email: 'nguyenthif@email.com',
+        station_name: 'Trạm sạc Quận 7',
+        vehicle_type: 'oto_ccs',
+        start_time: '2025-01-23T14:00:00',
+        end_time: '2025-01-23T16:00:00',
+        status: 'charging',
+        total_cost: 98000
       }
     ];
     setBookings(mockBookings);
@@ -75,6 +100,15 @@ const StationBookings = () => {
 
   const filteredBookings = bookings.filter(booking => {
     if (filterStatus && booking.status !== filterStatus) return false;
+    
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      if (!booking.user_name.toLowerCase().includes(search) && 
+          !booking.user_email.toLowerCase().includes(search) &&
+          !booking.station_name.toLowerCase().includes(search)) {
+        return false;
+      }
+    }
     
     const bookingDate = new Date(booking.start_time);
     
@@ -138,7 +172,7 @@ const StationBookings = () => {
           booking.booking_id,
           confirmationCode,
           booking.user_name,
-          station?.station_name || ''
+          booking.station_name
         );
 
         setAlertModal({
@@ -148,20 +182,14 @@ const StationBookings = () => {
           type: 'success'
         });
       } else {
-        const actionLabels: any = {
-          cancel: 'hủy',
-          complete: 'hoàn tất'
-        };
-
         setAlertModal({
           show: true,
           title: 'Thành công!',
-          message: `Đã ${actionLabels[confirmAction.type]} booking #${confirmAction.bookingId}`,
+          message: `Đã hủy booking #${confirmAction.bookingId}`,
           type: 'success'
         });
       }
 
-      // Reload bookings
       loadData();
     } catch (error: any) {
       setAlertModal({
@@ -186,34 +214,83 @@ const StationBookings = () => {
       },
       cancel: {
         title: 'Hủy booking?',
-        message: 'Bạn có chắc chắn muốn hủy booking này? Hành động này không thể hoàn tác.',
+        message: 'Bạn có chắc chắn muốn hủy booking này?',
         type: 'danger' as const
-      },
-      complete: {
-        title: 'Hoàn tất booking?',
-        message: 'Xác nhận rằng khách hàng đã hoàn thành sạc xe?',
-        type: 'info' as const
       }
     };
 
     return contents[confirmAction.type] || contents.confirm;
   };
 
+  // Thống kê
+  const stats = {
+    total: bookings.length,
+    completed: bookings.filter(b => b.status === 'completed').length,
+    pending: bookings.filter(b => b.status === 'pending').length,
+    totalRevenue: bookings.filter(b => b.status === 'completed').reduce((sum, b) => sum + b.total_cost, 0)
+  };
+
   return (
-    <div className="station-bookings">
+    <div className="booking-history-manager">
       <div className="page-header-manager">
         <div>
-          <button className="back-btn" onClick={() => navigate('/manager/stations')}>
-            <ArrowLeft size={20} />
-            <span>Quay lại</span>
-          </button>
-          <h1>{station?.station_name}</h1>
-          <p>Quản lý booking tại trạm</p>
+          <h1>Lịch sử đặt lịch</h1>
+          <p>Xem tất cả lịch sử đặt lịch của người dùng</p>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon blue">
+            <Calendar size={24} />
+          </div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.total}</span>
+            <span className="stat-label">Tổng booking</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon green">
+            <Calendar size={24} />
+          </div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.completed}</span>
+            <span className="stat-label">Hoàn thành</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon yellow">
+            <Clock size={24} />
+          </div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.pending}</span>
+            <span className="stat-label">Chờ xử lý</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon purple">
+            <DollarSign size={24} />
+          </div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.totalRevenue.toLocaleString()}đ</span>
+            <span className="stat-label">Doanh thu</span>
+          </div>
         </div>
       </div>
 
       {/* Filters */}
       <div className="filter-section">
+        <div className="filter-group search-group">
+          <Search size={20} />
+          <input
+            type="text"
+            placeholder="Tìm theo tên, email, trạm..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
         <div className="filter-group">
           <Filter size={20} />
           <select
@@ -230,22 +307,20 @@ const StationBookings = () => {
         </div>
 
         <div className="filter-group date-input-group">
-          <label className="date-label">Start</label>
+          <label className="date-label">Từ</label>
           <input
             type="date"
             value={filterStartDate}
             onChange={(e) => setFilterStartDate(e.target.value)}
-            placeholder="dd/mm/yyyy"
           />
         </div>
 
         <div className="filter-group date-input-group">
-          <label className="date-label">End</label>
+          <label className="date-label">Đến</label>
           <input
             type="date"
             value={filterEndDate}
             onChange={(e) => setFilterEndDate(e.target.value)}
-            placeholder="dd/mm/yyyy"
           />
         </div>
       </div>
@@ -256,10 +331,10 @@ const StationBookings = () => {
           <thead>
             <tr>
               <th>Mã booking</th>
-              <th>Tên khách</th>
+              <th>Khách hàng</th>
+              <th>Trạm sạc</th>
               <th>Loại xe</th>
-              <th>Thời gian bắt đầu</th>
-              <th>Thời gian kết thúc</th>
+              <th>Thời gian</th>
               <th>Trạng thái</th>
               <th>Tổng tiền</th>
               <th>Thao tác</th>
@@ -280,7 +355,16 @@ const StationBookings = () => {
                   <td>
                     <div className="user-cell">
                       <User size={16} />
-                      <span>{booking.user_name}</span>
+                      <div className="user-details">
+                        <span className="user-name">{booking.user_name}</span>
+                        <span className="user-email">{booking.user_email}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="station-cell">
+                      <MapPin size={16} />
+                      <span>{booking.station_name}</span>
                     </div>
                   </td>
                   <td>
@@ -292,13 +376,13 @@ const StationBookings = () => {
                   <td>
                     <div className="time-cell">
                       <Clock size={14} />
-                      <span>{new Date(booking.start_time).toLocaleString('vi-VN')}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="time-cell">
-                      <Clock size={14} />
-                      <span>{new Date(booking.end_time).toLocaleString('vi-VN')}</span>
+                      <div className="time-details">
+                        <span>{new Date(booking.start_time).toLocaleDateString('vi-VN')}</span>
+                        <span className="time-range">
+                          {new Date(booking.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - 
+                          {new Date(booking.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
                   </td>
                   <td>{getStatusBadge(booking.status)}</td>
@@ -332,14 +416,6 @@ const StationBookings = () => {
                           onClick={() => handleAction('cancel', booking.booking_id)}
                         >
                           Hủy
-                        </button>
-                      )}
-                      {booking.status === 'charging' && (
-                        <button
-                          className="action-btn-text"
-                          onClick={() => handleAction('complete', booking.booking_id)}
-                        >
-                          Hoàn tất
                         </button>
                       )}
                       <button
@@ -380,4 +456,4 @@ const StationBookings = () => {
   );
 };
 
-export default StationBookings;
+export default BookingHistory;

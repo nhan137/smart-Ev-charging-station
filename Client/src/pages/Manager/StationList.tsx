@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, MapPin, DollarSign, Zap, Eye, Settings, Calendar, Filter } from 'lucide-react';
+import { Building2, MapPin, Filter } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { mockStations } from '../../services/mockData';
 import './StationList.css';
@@ -103,27 +103,24 @@ const StationList = () => {
                   <td>{station.available_slots}/{station.total_slots}</td>
                   <td>{getStatusBadge(station.status || 'active')}</td>
                   <td>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div className="action-buttons">
                       <button
-                        className="action-btn btn-detail"
-                        onClick={() => navigate(`/manager/stations/${station.station_id}`)}
-                        title="Xem chi tiết"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        className="action-btn btn-view"
+                        className="action-btn-text"
                         onClick={() => navigate(`/manager/stations/${station.station_id}/bookings`)}
-                        title="Xem booking"
                       >
-                        <Calendar size={16} />
+                        Xem đặt lịch
                       </button>
                       <button
-                        className="action-btn btn-edit"
-                        onClick={() => navigate(`/manager/stations/${station.station_id}/status`)}
-                        title="Cập nhật trạng thái"
+                        className="action-btn-text"
+                        onClick={() => navigate(`/manager/stations/${station.station_id}`)}
                       >
-                        <Settings size={16} />
+                        Xem chi tiết
+                      </button>
+                      <button
+                        className="action-btn-text"
+                        onClick={() => navigate(`/manager/stations/${station.station_id}/status`)}
+                      >
+                        Cập nhật trạng thái
                       </button>
                     </div>
                   </td>

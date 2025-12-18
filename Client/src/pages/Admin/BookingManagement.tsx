@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Filter, Search, Calendar, User, Building2, Clock, DollarSign, Eye, X as XIcon } from 'lucide-react';
+import { Filter, Search, Calendar, User, Building2, Clock, DollarSign } from 'lucide-react';
 import { mockStations } from '../../services/mockData';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
@@ -168,6 +168,36 @@ const BookingManagement = () => {
     
     return true;
   });
+
+  const handleConfirmBooking = (booking: Booking) => {
+    setConfirmModal({
+      show: true,
+      title: 'Xác nhận booking?',
+      message: `Bạn có chắc chắn muốn xác nhận booking #${booking.booking_id} của ${booking.user_name}?`,
+      type: 'info',
+      onConfirm: async () => {
+        try {
+          // TODO: Call API
+          // await bookingService.confirmBooking(booking.booking_id);
+          
+          setAlertModal({
+            show: true,
+            title: 'Thành công!',
+            message: `Đã xác nhận booking #${booking.booking_id}`,
+            type: 'success'
+          });
+          loadBookings();
+        } catch (error: any) {
+          setAlertModal({
+            show: true,
+            title: 'Lỗi',
+            message: error.message || 'Có lỗi xảy ra',
+            type: 'error'
+          });
+        }
+      }
+    });
+  };
 
   const handleCancelBooking = (booking: Booking) => {
     setConfirmModal({
@@ -364,19 +394,25 @@ const BookingManagement = () => {
                   <td>
                     <div className="action-buttons">
                       <button
-                        className="action-btn btn-view"
+                        className="action-btn-text"
                         onClick={() => setDetailModal({ show: true, booking })}
-                        title="Xem chi tiết"
                       >
-                        <Eye size={16} />
+                        Xem chi tiết
                       </button>
+                      {booking.status === 'pending' && (booking as any).payment_status === 'pending' && (
+                        <button
+                          className="action-btn-text"
+                          onClick={() => handleConfirmBooking(booking)}
+                        >
+                          Xác nhận
+                        </button>
+                      )}
                       {(booking.status === 'pending' || booking.status === 'confirmed') && (
                         <button
-                          className="action-btn btn-cancel"
+                          className="action-btn-text"
                           onClick={() => handleCancelBooking(booking)}
-                          title="Hủy"
                         >
-                          <XIcon size={16} />
+                          Hủy
                         </button>
                       )}
                     </div>

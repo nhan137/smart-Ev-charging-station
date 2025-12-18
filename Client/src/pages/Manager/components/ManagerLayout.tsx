@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../../../services/authService';
-import { Building2, Calendar, FileText, LogOut, Menu, X, BarChart3 } from 'lucide-react';
+import { Building2, Calendar, FileText, LogOut, Menu, X, BarChart3, Mail, History, Bell } from 'lucide-react';
 import { useState } from 'react';
 import './ManagerLayout.css';
 
@@ -19,7 +19,11 @@ const ManagerLayout = () => {
   const menuItems = [
     { icon: <BarChart3 size={20} />, label: 'Dashboard', path: '/manager/dashboard' },
     { icon: <Building2 size={20} />, label: 'Danh sách trạm', path: '/manager/stations' },
-    { icon: <FileText size={20} />, label: 'Báo cáo sự cố', path: '/manager/reports' }
+    { icon: <Calendar size={20} />, label: 'Lịch sử đặt lịch', path: '/manager/bookings' },
+    { icon: <FileText size={20} />, label: 'Báo cáo sự cố', path: '/manager/reports' },
+    { icon: <Mail size={20} />, label: 'Hộp thư', path: '/manager/mailbox' },
+    { icon: <History size={20} />, label: 'Lịch sử báo cáo', path: '/manager/reporthistory' },
+    { icon: <Bell size={20} />, label: 'Thông báo', path: '/manager/notifications' }
   ];
 
   const isActive = (path: string) => {

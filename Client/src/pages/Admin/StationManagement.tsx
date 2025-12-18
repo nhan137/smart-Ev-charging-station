@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Filter, Search, Plus, Edit, Trash2, MapPin, Zap, DollarSign, Eye } from 'lucide-react';
+import { Filter, Search, Plus, MapPin, Zap, DollarSign } from 'lucide-react';
 import { mockStations, mockUsers } from '../../services/mockData';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
@@ -289,25 +289,22 @@ const StationManagement = () => {
                 <td>
                   <div className="action-buttons">
                     <button
-                      className="action-btn btn-view"
-                      onClick={() => setDetailModal({ show: true, station })}
-                      title="Xem chi tiết"
-                    >
-                      <Eye size={16} />
-                    </button>
-                    <button
-                      className="action-btn btn-edit"
+                      className="action-btn-text"
                       onClick={() => setFormModal({ show: true, station })}
-                      title="Chỉnh sửa"
                     >
-                      <Edit size={16} />
+                      Chỉnh sửa
                     </button>
                     <button
-                      className="action-btn btn-delete"
-                      onClick={() => handleDeleteStation(station)}
-                      title="Xóa"
+                      className="action-btn-text"
+                      onClick={() => setDetailModal({ show: true, station })}
                     >
-                      <Trash2 size={16} />
+                      Xem chi tiết
+                    </button>
+                    <button
+                      className="action-btn-text"
+                      onClick={() => handleDeleteStation(station)}
+                    >
+                      Xóa
                     </button>
                   </div>
                 </td>

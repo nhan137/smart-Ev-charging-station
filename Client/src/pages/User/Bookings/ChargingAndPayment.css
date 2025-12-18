@@ -227,7 +227,7 @@
 
 .booking-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.75rem;
 }
 
@@ -254,16 +254,6 @@
 .action-btn-detail:hover {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
   opacity: 0.95;
-}
-
-.action-btn-print {
-  background: #f1f5f9;
-  color: #475569;
-  border: 2px solid #e2e8f0;
-}
-
-.action-btn-print:hover {
-  background: #e2e8f0;
 }
 
 /* Empty State */

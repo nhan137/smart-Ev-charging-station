@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Shield, Users, Building2, LogOut, Calendar, DollarSign, LayoutDashboard, Bell } from 'lucide-react';
+import { Shield, Users, Building2, LogOut, Calendar, DollarSign, LayoutDashboard, Bell, FileText } from 'lucide-react';
 import './AdminLayout.css';
 
 const AdminLayout = () => {
@@ -19,7 +19,8 @@ const AdminLayout = () => {
     { path: '/admin/stations', icon: Building2, label: 'Quản lý trạm sạc' },
     { path: '/admin/bookings', icon: Calendar, label: 'Quản lý đặt lịch' },
     { path: '/admin/payments', icon: DollarSign, label: 'Quản lý thanh toán' },
-    { path: '/admin/notifications', icon: Bell, label: 'Gửi thông báo' }
+    { path: '/admin/notifications', icon: Bell, label: 'Gửi thông báo' },
+    { path: '/admin/reports', icon: FileText, label: 'Danh sách báo cáo' }
   ];
 
   return (

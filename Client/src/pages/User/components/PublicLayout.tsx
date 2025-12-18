@@ -1,6 +1,20 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../../../services/authService';
-import { Home, MapPin, Building2, Calendar, Menu, X, History, LogOut, ChevronDown, Star, Bell } from 'lucide-react';
+import {
+  Home,
+  MapPin,
+  Building2,
+  Calendar,
+  Menu,
+  X,
+  History,
+  LogOut,
+  ChevronDown,
+  Star,
+  Bell,
+  AlertTriangle,
+  FileText
+} from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import RegisterModal from '../../Auth/RegisterModal';
 import LoginModal from '../../Auth/LoginModal';
@@ -12,55 +26,53 @@ import './PublicLayout.css';
 const PublicLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
   const isAuthenticated = authService.isAuthenticated();
   const user = authService.getCurrentUser();
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showNotificationPopup, setShowNotificationPopup] = useState(false);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Listen for custom event to open login modal from register modal
+  /* ---------------- Effects ---------------- */
+
   useEffect(() => {
-    const handleOpenLoginModal = () => {
-      setShowLoginModal(true);
-    };
+    const handleOpenLoginModal = () => setShowLoginModal(true);
     window.addEventListener('openLoginModal', handleOpenLoginModal);
-    return () => {
-      window.removeEventListener('openLoginModal', handleOpenLoginModal);
-    };
+    return () => window.removeEventListener('openLoginModal', handleOpenLoginModal);
   }, []);
 
-  // Show notification popup when user logs in
   useEffect(() => {
-    if (isAuthenticated) {
-      // Check if we should show notification popup
-      const hasShownPopup = sessionStorage.getItem('hasShownNotificationPopup');
-      if (!hasShownPopup) {
-        // Show popup after a short delay
-        const timer = setTimeout(() => {
-          setShowNotificationPopup(true);
-          sessionStorage.setItem('hasShownNotificationPopup', 'true');
-        }, 1000);
-        return () => clearTimeout(timer);
-      }
+    if (!isAuthenticated) return;
+
+    const hasShown = sessionStorage.getItem('hasShownNotificationPopup');
+    if (!hasShown) {
+      const timer = setTimeout(() => {
+        setShowNotificationPopup(true);
+        sessionStorage.setItem('hasShownNotificationPopup', 'true');
+      }, 1000);
+
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowUserDropdown(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  /* ---------------- Handlers ---------------- */
 
   const handleLogout = () => {
     authService.logout();
@@ -72,30 +84,38 @@ const PublicLayout = () => {
   const handleNavClick = (item: any) => {
     if (item.requireAuth && !isAuthenticated) {
       setShowLoginModal(true);
-    } else if (item.action === 'booking') {
-      setShowBookingModal(true);
-    } else if (item.path) {
-      navigate(item.path);
-    } else {
-      // Tính năng đang phát triển
-      alert('Tính năng đang được phát triển!');
+      return;
     }
+
+    if (item.action === 'booking') {
+      setShowBookingModal(true);
+      return;
+    }
+
+    if (item.path) {
+      navigate(item.path);
+      return;
+    }
+
+    alert('Tính năng đang được phát triển!');
   };
 
+  /* ---------------- Navigation ---------------- */
+
   const navItems = [
-    { icon: <Home size={18} />, label: 'Trang chủ', path: '/', requireAuth: false },
-    { icon: <MapPin size={18} />, label: 'Bản đồ', path: '/map', requireAuth: false },
-    { icon: <Building2 size={18} />, label: 'Trạm sạc', path: '/stations', requireAuth: false },
+    { icon: <Home size={18} />, label: 'Trang chủ', path: '/' },
+    { icon: <MapPin size={18} />, label: 'Bản đồ', path: '/map' },
+    { icon: <Building2 size={18} />, label: 'Trạm sạc', path: '/stations' },
     { icon: <Calendar size={18} />, label: 'Đặt lịch', action: 'booking', requireAuth: true }
   ];
 
-  const isActive = (path: string) => {
-    return location.pathname === path;
-  };
+  const isActive = (path: string) => location.pathname === path;
+
+  /* ---------------- Render ---------------- */
 
   return (
     <div className="public-layout">
-      {/* Header */}
+      {/* ================= HEADER ================= */}
       <header className="public-header">
         <div className="public-header-container">
           <div className="header-left">
@@ -103,12 +123,13 @@ const PublicLayout = () => {
               ⚡ EV Charging
             </h1>
 
-            {/* Desktop Navigation */}
             <nav className="desktop-nav">
-              {navItems.map((item, index) => (
+              {navItems.map((item, i) => (
                 <button
-                  key={index}
-                  className={`nav-link ${item.path && isActive(item.path) ? 'nav-link-active' : ''}`}
+                  key={i}
+                  className={`nav-link ${
+                    item.path && isActive(item.path) ? 'nav-link-active' : ''
+                  }`}
                   onClick={() => handleNavClick(item)}
                 >
                   {item.icon}
@@ -121,7 +142,7 @@ const PublicLayout = () => {
           <div className="header-right">
             {isAuthenticated ? (
               <div className="user-menu" ref={dropdownRef}>
-                <button 
+                <button
                   className="user-menu-button"
                   onClick={() => setShowUserDropdown(!showUserDropdown)}
                 >
@@ -129,12 +150,17 @@ const PublicLayout = () => {
                     {user?.full_name?.charAt(0).toUpperCase() || 'U'}
                   </span>
                   <span className="user-name-text">{user?.full_name}</span>
-                  <ChevronDown size={18} className={`dropdown-icon ${showUserDropdown ? 'dropdown-icon-open' : ''}`} />
+                  <ChevronDown
+                    size={18}
+                    className={`dropdown-icon ${
+                      showUserDropdown ? 'dropdown-icon-open' : ''
+                    }`}
+                  />
                 </button>
 
                 {showUserDropdown && (
                   <div className="user-dropdown">
-                    <button 
+                    <button
                       className="dropdown-item"
                       onClick={() => {
                         navigate('/bookings/list');
@@ -144,7 +170,8 @@ const PublicLayout = () => {
                       <Calendar size={18} />
                       <span>Lịch sử đặt lịch</span>
                     </button>
-                    <button 
+
+                    <button
                       className="dropdown-item"
                       onClick={() => {
                         navigate('/bookings/history');
@@ -154,7 +181,8 @@ const PublicLayout = () => {
                       <History size={18} />
                       <span>Lịch sử sạc & Thanh toán</span>
                     </button>
-                    <button 
+
+                    <button
                       className="dropdown-item"
                       onClick={() => {
                         navigate('/user/feedbacks-favorites');
@@ -164,7 +192,8 @@ const PublicLayout = () => {
                       <Star size={18} />
                       <span>Đánh giá & Trạm yêu thích</span>
                     </button>
-                    <button 
+
+                    <button
                       className="dropdown-item"
                       onClick={() => {
                         navigate('/user/notifications');
@@ -174,8 +203,35 @@ const PublicLayout = () => {
                       <Bell size={18} />
                       <span>Thông báo</span>
                     </button>
-                    <div className="dropdown-divider"></div>
-                    <button 
+
+                    {/* ===== NEW ITEMS ===== */}
+                    <button
+                      className="dropdown-item"
+                      type="button"
+                      onClick={() => {
+                        navigate('/user/report/create');
+                        setShowUserDropdown(false);
+                      }}
+                    >
+                      <AlertTriangle size={18} />
+                      <span>Báo cáo sự cố</span>
+                    </button>
+
+
+                    <button
+                      className="dropdown-item"
+                      onClick={() => {
+                        navigate('/user/report/history');
+                        setShowUserDropdown(false);
+                      }}
+                    >
+                      <FileText size={18} />
+                      <span>Lịch sử báo cáo sự cố</span>
+                    </button>
+
+                    <div className="dropdown-divider" />
+
+                    <button
                       className="dropdown-item dropdown-item-danger"
                       onClick={handleLogout}
                     >
@@ -187,23 +243,22 @@ const PublicLayout = () => {
               </div>
             ) : (
               <>
-                <button 
-                  onClick={() => setShowLoginModal(true)}
+                <button
                   className="nav-button nav-button-secondary"
+                  onClick={() => setShowLoginModal(true)}
                 >
                   Đăng nhập
                 </button>
-                <button 
-                  onClick={() => setShowRegisterModal(true)}
+                <button
                   className="nav-button nav-button-primary"
+                  onClick={() => setShowRegisterModal(true)}
                 >
                   Đăng ký
                 </button>
               </>
             )}
 
-            {/* Mobile Menu Toggle */}
-            <button 
+            <button
               className="mobile-menu-toggle"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
@@ -212,13 +267,14 @@ const PublicLayout = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <nav className="mobile-nav">
-            {navItems.map((item, index) => (
+            {navItems.map((item, i) => (
               <button
-                key={index}
-                className={`mobile-nav-link ${item.path && isActive(item.path) ? 'mobile-nav-link-active' : ''}`}
+                key={i}
+                className={`mobile-nav-link ${
+                  item.path && isActive(item.path) ? 'mobile-nav-link-active' : ''
+                }`}
                 onClick={() => {
                   handleNavClick(item);
                   setMobileMenuOpen(false);
@@ -232,34 +288,30 @@ const PublicLayout = () => {
         )}
       </header>
 
-      {/* Main Content */}
+      {/* ================= MAIN ================= */}
       <main className="public-main">
         <Outlet />
       </main>
 
-      {/* Footer */}
       <Footer />
 
-      {/* Login Modal */}
-      <LoginModal 
-        isOpen={showLoginModal} 
+      {/* ================= MODALS ================= */}
+      <LoginModal
+        isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onSwitchToRegister={() => setShowRegisterModal(true)}
       />
 
-      {/* Register Modal */}
-      <RegisterModal 
-        isOpen={showRegisterModal} 
-        onClose={() => setShowRegisterModal(false)} 
+      <RegisterModal
+        isOpen={showRegisterModal}
+        onClose={() => setShowRegisterModal(false)}
       />
 
-      {/* Quick Booking Modal */}
       <QuickBookingModal
         isOpen={showBookingModal}
         onClose={() => setShowBookingModal(false)}
       />
 
-      {/* Notification Popup */}
       {showNotificationPopup && (
         <NotificationPopup onClose={() => setShowNotificationPopup(false)} />
       )}
