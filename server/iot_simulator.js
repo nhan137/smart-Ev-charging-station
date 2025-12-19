@@ -48,7 +48,7 @@ if (!BOOKING_ID || isNaN(BOOKING_ID) || BOOKING_ID <= 0) {
 
 // Initial simulation state
 // CRITICAL: Start at 50% to simulate realistic charging progress
-let currentBatteryPercent = 80; // Start at 50% (not 95% - that was too high!)
+let currentBatteryPercent = 50; // Start at 50% (not 95% - that was too high!)
 let energyConsumed = 0.0; // Start at 0 kWh
 
 /**

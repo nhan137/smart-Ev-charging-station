@@ -51,15 +51,30 @@ function createPaymentUrl(params, secretKey, vnpUrl) {
     }
   });
   
+  // CRITICAL: Ensure vnp_Amount is a string (not number) and properly formatted
+  if (cleanParams.vnp_Amount) {
+    // Convert to integer first, then to string to remove any decimals
+    cleanParams.vnp_Amount = String(Math.round(parseFloat(cleanParams.vnp_Amount)));
+    console.log('[VNPay] vnp_Amount formatted:', {
+      original: params.vnp_Amount,
+      formatted: cleanParams.vnp_Amount,
+      type: typeof cleanParams.vnp_Amount
+    });
+  }
+  
   // Sort parameters using VNPay official sortObject function
   const sortedParams = sortObject(cleanParams);
   
   // Build hash data using qs.stringify with encode: false (VNPay official method)
   const signData = qs.stringify(sortedParams, { encode: false });
   
+  console.log('[VNPay] Hash data (before signing):', signData.substring(0, 200) + '...');
+  
   // Create hash (HMAC SHA512) - VNPay standard
   const hmac = crypto.createHmac('sha512', trimmedSecretKey);
   const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+  
+  console.log('[VNPay] SecureHash generated:', signed.substring(0, 20) + '...');
   
   // Add hash to params
   sortedParams['vnp_SecureHash'] = signed;
@@ -118,8 +133,25 @@ function verifyHash(params, secretKey) {
  * @param {number} amount - Amount in VND
  * @returns {string} - Formatted amount
  */
+/**
+ * Format amount for VNPay (multiply by 100, remove decimals)
+ * CRITICAL: VNPay requires amount to be multiplied by 100
+ * Example: 5,700 VND → returns "570000" (not "5700")
+ * @param {number} amount - Amount in VND (e.g., 5700)
+ * @returns {string} - Formatted amount multiplied by 100 (e.g., "570000")
+ */
 function formatAmount(amount) {
-  return Math.round(amount * 100).toString();
+  // Ensure amount is a number
+  const numAmount = parseFloat(amount);
+  if (isNaN(numAmount) || numAmount < 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
+  
+  // Multiply by 100 and round to ensure integer
+  // Example: 5700 → 570000
+  const formatted = Math.round(numAmount * 100);
+  
+  return formatted.toString();
 }
 
 /**

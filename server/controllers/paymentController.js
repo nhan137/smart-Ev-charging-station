@@ -1,6 +1,7 @@
 const Payment = require('../models/Payment');
 const Booking = require('../models/Booking');
 const Station = require('../models/Station');
+const ChargingSession = require('../models/ChargingSession');
 const Notification = require('../models/Notification');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
@@ -40,11 +41,19 @@ exports.vnpayInit = async (req, res, next) => {
         user_id: user_id,
         status: { [Op.in]: ['completed', 'charging'] } // Allow payment for completed or charging bookings
       },
-      include: [{
-        model: Station,
-        as: 'station',
-        attributes: ['station_name', 'station_id']
-      }],
+      include: [
+        {
+          model: Station,
+          as: 'station',
+          attributes: ['station_name', 'station_id']
+        },
+        {
+          model: ChargingSession,
+          as: 'chargingSession',
+          required: false,
+          attributes: ['actual_cost', 'energy_consumed', 'start_battery_percent', 'end_battery_percent']
+        }
+      ],
       transaction
     });
 
@@ -70,14 +79,41 @@ exports.vnpayInit = async (req, res, next) => {
       });
     }
 
-    // 2. Calculate total amount (use booking.total_cost)
-    const total_amount = parseFloat(booking.total_cost || 0);
+    // 2. Calculate total amount - CRITICAL: Use actual_cost from ChargingSession (tiền thực tế khi sạc)
+    // If ChargingSession exists and has actual_cost, use it; otherwise fallback to booking.total_cost
+    let total_amount = 0;
+    const chargingSession = booking.chargingSession;
+    
+    if (chargingSession && chargingSession.actual_cost) {
+      // Use actual cost from charging session (tiền thực tế)
+      total_amount = parseFloat(chargingSession.actual_cost);
+      console.log(`[Payment] Using actual_cost from ChargingSession: ${total_amount}`);
+    } else if (booking.total_cost) {
+      // Fallback to booking total_cost if no charging session yet
+      total_amount = parseFloat(booking.total_cost);
+      console.log(`[Payment] Using total_cost from Booking (fallback): ${total_amount}`);
+    }
+    
+    // VNPay sandbox - Different banks have different minimum amounts
+    // NCB Bank typically requires minimum 5,000 VND
+    // Some banks may require 10,000 VND
+    // We'll use 5,000 VND as a safe minimum
+    const MIN_AMOUNT = 5000;
     
     if (total_amount <= 0) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Invalid booking amount'
+        message: 'Invalid booking amount. Please ensure charging is completed.'
+      });
+    }
+    
+    // Check minimum amount for VNPay (bank-specific limits)
+    if (total_amount < MIN_AMOUNT) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Số tiền thanh toán tối thiểu là ${MIN_AMOUNT.toLocaleString('vi-VN')}đ (theo quy định của ngân hàng). Số tiền hiện tại: ${total_amount.toLocaleString('vi-VN')}đ. Vui lòng đảm bảo số tiền >= ${MIN_AMOUNT.toLocaleString('vi-VN')}đ.`
       });
     }
 
@@ -146,12 +182,26 @@ exports.vnpayInit = async (req, res, next) => {
       clientIp = clientIp.split(',')[0].trim();
     }
 
+    // CRITICAL: Format amount for VNPay (must multiply by 100)
+    // VNPay expects amount in smallest currency unit (VND * 100)
+    // Example: 2,700 VND → must send 270,000 to VNPay
+    // VNPay will then display it as 2,700VND (divides by 100 for display)
+    const vnp_Amount = formatAmount(total_amount);
+    
+    console.log('========================================');
+    console.log('[Payment] ✅ Amount formatting for VNPay:');
+    console.log(`  Original amount (from DB): ${total_amount.toLocaleString('vi-VN')} VND`);
+    console.log(`  Formatted amount (× 100):  ${parseInt(vnp_Amount).toLocaleString('vi-VN')} (sent to VNPay)`);
+    console.log(`  VNPay will display:        ${(parseInt(vnp_Amount) / 100).toLocaleString('vi-VN')} VND`);
+    console.log(`  Calculation: ${total_amount} × 100 = ${vnp_Amount}`);
+    console.log('========================================');
+
     // Create VNPay parameters
     const vnp_Params = {
       vnp_Version: '2.1.0',
       vnp_Command: 'pay',
       vnp_TmnCode: vnp_TmnCode,
-      vnp_Amount: formatAmount(total_amount),
+      vnp_Amount: vnp_Amount, // Already multiplied by 100 via formatAmount
       vnp_CurrCode: 'VND',
       vnp_TxnRef: vnp_TxnRef,
       vnp_OrderInfo: orderInfo, // ASCII only, max 255 chars
@@ -162,8 +212,21 @@ exports.vnpayInit = async (req, res, next) => {
       vnp_CreateDate: new Date().toISOString().replace(/[-:T]/g, '').substring(0, 14) // YYYYMMDDHHmmss
     };
 
+    // Debug: Log all VNPay parameters before creating URL
+    console.log('[Payment] VNPay Parameters:', {
+      vnp_Amount: vnp_Params.vnp_Amount,
+      vnp_TxnRef: vnp_Params.vnp_TxnRef,
+      vnp_OrderInfo: vnp_Params.vnp_OrderInfo,
+      vnp_ReturnUrl: vnp_Params.vnp_ReturnUrl,
+      vnp_TmnCode: vnp_Params.vnp_TmnCode,
+      vnp_Command: vnp_Params.vnp_Command,
+      vnp_Version: vnp_Params.vnp_Version
+    });
+
     // Create payment URL with hash
     const redirect_url = createPaymentUrl(vnp_Params, vnp_HashSecret, vnp_Url);
+    
+    console.log('[Payment] ✅ VNPay Payment URL created:', redirect_url.substring(0, 100) + '...');
 
     // Store transaction reference in payment (optional, can use payment_id)
     // You might want to add a vnp_txn_ref field to payments table
@@ -280,9 +343,10 @@ exports.vnpayCallback = async (req, res, next) => {
         });
       }
 
-      // Redirect to Frontend success page (Option B)
+      // Redirect to Frontend Payment page with success status
+      // User will see success modal on Payment page, then click OK to go to Home
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const redirectUrl = `${frontendUrl}/payment/success?booking_id=${booking_id}&status=success`;
+      const redirectUrl = `${frontendUrl}/bookings/${booking_id}/payment?payment_status=success&payment_id=${payment.payment_id}`;
       return res.redirect(redirectUrl);
     } else {
       // Payment failed
@@ -318,9 +382,9 @@ exports.vnpayCallback = async (req, res, next) => {
 
       const errorMessage = errorMessages[vnp_ResponseCode] || `Lỗi thanh toán. Mã lỗi: ${vnp_ResponseCode}`;
 
-      // Redirect to Frontend error page (Option B)
+      // Redirect to Frontend Payment page with failed status
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const redirectUrl = `${frontendUrl}/payment/failed?booking_id=${booking_id}&error_code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`;
+      const redirectUrl = `${frontendUrl}/bookings/${booking_id}/payment?payment_status=failed&error_code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`;
       return res.redirect(redirectUrl);
     }
   } catch (error) {

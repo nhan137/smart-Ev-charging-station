@@ -402,6 +402,126 @@
   cursor: not-allowed;
 }
 
+/* Payment Success/Failed Modal */
+.payment-success-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.payment-success-modal-content {
+  background: white;
+  border-radius: 20px;
+  padding: 2.5rem;
+  max-width: 450px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.payment-success-icon {
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: center;
+  animation: scaleIn 0.5s ease;
+}
+
+.payment-success-modal-content h2 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 1rem;
+}
+
+.payment-success-modal-content p {
+  color: #64748b;
+  font-size: 1.05rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.payment-success-info {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin: 1.5rem 0;
+  border: 2px solid #e2e8f0;
+}
+
+.payment-success-info .info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.payment-success-info .info-row span:first-child {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.payment-success-info .info-row .value {
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.payment-success-info .info-row .value.highlight {
+  color: #10b981;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.payment-success-btn {
+  width: 100%;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  margin-top: 1rem;
+}
+
+.payment-success-btn:hover {
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.5);
+  transform: translateY(-2px);
+}
+
 @media (max-width: 768px) {
   .payment-page {
     padding: 1rem;
@@ -424,6 +544,14 @@
   }
 
   .total-value {
+    font-size: 1.5rem;
+  }
+
+  .payment-success-modal-content {
+    padding: 2rem 1.5rem;
+  }
+
+  .payment-success-modal-content h2 {
     font-size: 1.5rem;
   }
 }

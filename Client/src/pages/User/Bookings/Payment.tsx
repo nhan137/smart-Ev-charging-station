@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle, CreditCard, QrCode, Building2, Clock, Battery, Zap, DollarSign, Tag, ArrowLeft, Loader2 } from 'lucide-react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { CheckCircle, CreditCard, QrCode, Building2, Clock, Battery, Zap, DollarSign, Tag, ArrowLeft, Loader2, XCircle } from 'lucide-react';
 import AlertModal from '../../../components/shared/AlertModal';
 import { bookingService } from '../../../services/bookingService';
 import { paymentService } from '../../../services/paymentService';
@@ -9,6 +9,7 @@ import './Payment.css';
 const Payment = () => {
   const navigate = useNavigate();
   const { booking_id } = useParams();
+  const [searchParams] = useSearchParams();
   
   const [paymentMethod, setPaymentMethod] = useState<'QR' | 'Bank'>('Bank'); // Default to Bank (VNPay)
   const [loading, setLoading] = useState(false);
@@ -20,6 +21,36 @@ const Payment = () => {
     message: '',
     type: 'success'
   });
+  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
+  const [showPaymentFailedModal, setShowPaymentFailedModal] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<{ status: string; message?: string; error_code?: string } | null>(null);
+
+  // Check for payment callback from VNPay
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment_status');
+    const errorCode = searchParams.get('error_code');
+    const errorMessage = searchParams.get('message');
+    const paymentId = searchParams.get('payment_id');
+
+    if (paymentStatus === 'success') {
+      setPaymentResult({
+        status: 'success',
+        message: 'Thanh toán thành công!'
+      });
+      setShowPaymentSuccessModal(true);
+      // Remove query params from URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (paymentStatus === 'failed') {
+      setPaymentResult({
+        status: 'failed',
+        message: errorMessage || 'Thanh toán thất bại',
+        error_code: errorCode || undefined
+      });
+      setShowPaymentFailedModal(true);
+      // Remove query params from URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
 
   // Load booking data from backend
   useEffect(() => {
@@ -43,6 +74,11 @@ const Payment = () => {
           const bookingData = response.data;
           
           // Format booking data for display
+          // CRITICAL: Use actual_cost from chargingSession if available (tiền thực tế khi sạc)
+          const actualCost = bookingData.chargingSession?.actual_cost 
+            ? parseFloat(bookingData.chargingSession.actual_cost)
+            : (bookingData.total_cost ? parseFloat(bookingData.total_cost) : 0);
+          
           const formattedBooking = {
             booking_id: bookingData.booking_id,
             station_name: bookingData.station?.station_name || 'N/A',
@@ -56,9 +92,9 @@ const Payment = () => {
             promotion_code: bookingData.promotion?.code || null,
             discount_percent: bookingData.promotion?.discount_percent || 0,
             max_discount: bookingData.promotion?.max_discount || 0,
-            original_cost: bookingData.total_cost || 0,
+            original_cost: actualCost, // Use actual cost
             discount_amount: bookingData.discount_amount || 0,
-            total_cost: bookingData.total_cost || 0
+            total_cost: actualCost // Use actual cost (tiền thực tế khi sạc)
           };
           
           setBooking(formattedBooking);
@@ -155,10 +191,6 @@ const Payment = () => {
     return (
       <div className="payment-page">
         <div className="payment-container">
-          <button className="back-button" onClick={() => navigate(-1)}>
-            <ArrowLeft size={20} />
-            <span>Quay lại</span>
-          </button>
           <div style={{ textAlign: 'center', padding: '2rem' }}>
             <p>Không tìm thấy thông tin đặt lịch</p>
             <button onClick={() => navigate('/bookings/history')} style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
@@ -173,11 +205,6 @@ const Payment = () => {
   return (
     <div className="payment-page">
       <div className="payment-container">
-        <button className="back-button" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-          <span>Quay lại</span>
-        </button>
-
         <div className="payment-header">
           <CheckCircle size={64} className="success-icon" />
           <h1>Thanh toán</h1>
