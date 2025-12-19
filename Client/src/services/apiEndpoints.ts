@@ -251,7 +251,7 @@ export const bookingAPI = {
   getMyBookings: async () => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) return [];
       
@@ -307,7 +307,7 @@ export const bookingAPI = {
   create: async (data: any) => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) throw new Error('Chưa đăng nhập');
       
@@ -402,7 +402,7 @@ export const favoriteAPI = {
   getAll: async () => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) return [];
       
@@ -426,7 +426,7 @@ export const favoriteAPI = {
   add: async (stationId: number) => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) throw new Error('Chưa đăng nhập');
       
@@ -458,7 +458,7 @@ export const favoriteAPI = {
   remove: async (stationId: number) => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) throw new Error('Chưa đăng nhập');
       
@@ -484,7 +484,7 @@ export const favoriteAPI = {
   check: async (stationId: number) => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 100));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) return { isFavorite: false };
       
@@ -528,7 +528,7 @@ export const feedbackAPI = {
   getMyFeedbacks: async () => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) return [];
       
@@ -549,7 +549,7 @@ export const feedbackAPI = {
   create: async (data: { station_id: number; booking_id: number; rating: number; comment?: string }) => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) throw new Error('Chưa đăng nhập');
       
@@ -623,7 +623,7 @@ export const paymentAPI = {
   getMyPayments: async () => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) return [];
       
@@ -708,7 +708,7 @@ export const userAPI = {
   getMe: async () => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 200));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       return userStr ? JSON.parse(userStr) : null;
     }
     
@@ -726,12 +726,12 @@ export const userAPI = {
   updateMe: async (data: any) => {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const userStr = localStorage.getItem('user');
+      const userStr = sessionStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) throw new Error('Chưa đăng nhập');
       
       const updatedUser = { ...user, ...data };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+        sessionStorage.setItem('user', JSON.stringify(updatedUser));
       
       const userIndex = mockUsers.findIndex(u => u.user_id === user.user_id);
       if (userIndex !== -1) {

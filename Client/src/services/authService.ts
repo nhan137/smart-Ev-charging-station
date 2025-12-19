@@ -7,8 +7,8 @@ export const authService = {
       
       if (response.data.success && response.data.data.token) {
         const { token, user } = response.data.data;
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
+        sessionStorage.setItem('token', token);
+        sessionStorage.setItem('user', JSON.stringify(user));
         return { token, user };
       }
       
@@ -33,8 +33,8 @@ export const authService = {
       
       if (response.data.success && response.data.data.token) {
         const { token, user } = response.data.data;
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
+        sessionStorage.setItem('token', token);
+        sessionStorage.setItem('user', JSON.stringify(user));
         return { token, user };
       }
       
@@ -101,22 +101,22 @@ export const authService = {
       // Continue logout even if API fails
       console.error('Logout API error:', error);
     } finally {
-      // Always clear local storage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      // Always clear session storage
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
     }
   },
 
   getCurrentUser: () => {
-    const userStr = localStorage.getItem('user');
+    const userStr = sessionStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
   },
 
   isAuthenticated: () => {
-    return !!localStorage.getItem('token');
+    return !!sessionStorage.getItem('token');
   },
 
   getToken: () => {
-    return localStorage.getItem('token');
+    return sessionStorage.getItem('token');
   }
 };

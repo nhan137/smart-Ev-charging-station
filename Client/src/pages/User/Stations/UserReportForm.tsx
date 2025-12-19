@@ -160,7 +160,7 @@ const { name, value } = e.target;
     setIsSubmitting(true);
 
     setTimeout(() => {
-      const existing = localStorage.getItem('user_reports');
+      const existing = sessionStorage.getItem('user_reports');
       const reports: ReportHistoryItem[] = existing ? JSON.parse(existing) : [];
 
       const nowIso = new Date().toISOString();
@@ -188,7 +188,7 @@ const { name, value } = e.target;
         ]
       });
 
-      localStorage.setItem('user_reports', JSON.stringify(reports));
+      sessionStorage.setItem('user_reports', JSON.stringify(reports));
 
       imagePreviews.forEach(p => URL.revokeObjectURL(p));
 setFormData({ stationId: '', title: '', description: '', images: [] });

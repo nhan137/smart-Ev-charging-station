@@ -28,7 +28,7 @@ const AdminLogin = () => {
       // Mock check for admin role
       if (formData.email === 'admin@evcharge.com' && formData.password === 'admin123') {
         // Mock: Check role_id = 3 (Admin)
-        localStorage.setItem('user', JSON.stringify({
+        sessionStorage.setItem('user', JSON.stringify({
           user_id: 1,
           email: formData.email,
           full_name: 'Admin',
