@@ -1,17 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle, CreditCard, QrCode, Building2, Clock, Battery, Zap, DollarSign, Tag, ArrowLeft } from 'lucide-react';
+import { CheckCircle, CreditCard, QrCode, Building2, Clock, Battery, Zap, DollarSign, Tag, ArrowLeft, Loader2 } from 'lucide-react';
 import AlertModal from '../../../components/shared/AlertModal';
-import { mockBookings, getNextId } from '../../../services/mockData';
-import { authService } from '../../../services/authService';
+import { bookingService } from '../../../services/bookingService';
+import { paymentService } from '../../../services/paymentService';
 import './Payment.css';
 
 const Payment = () => {
   const navigate = useNavigate();
   const { booking_id } = useParams();
   
-  const [paymentMethod, setPaymentMethod] = useState<'QR' | 'Bank'>('QR');
+  const [paymentMethod, setPaymentMethod] = useState<'QR' | 'Bank'>('Bank'); // Default to Bank (VNPay)
   const [loading, setLoading] = useState(false);
+  const [loadingBooking, setLoadingBooking] = useState(true);
+  const [booking, setBooking] = useState<any>(null);
   const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
     show: false,
     title: '',
@@ -19,24 +21,65 @@ const Payment = () => {
     type: 'success'
   });
 
-  // Mock booking data
-  const booking = {
-    booking_id: booking_id || '12345',
-    station_name: 'Trạm sạc Hải Châu',
-    vehicle_type: 'oto_ccs',
-    actual_start: '2024-01-15T14:05:00',
-    actual_end: '2024-01-15T15:25:00',
-    start_battery_percent: 20,
-    end_battery_percent: 80,
-    energy_consumed: 30,
-    price_per_kwh: 3500,
-    promotion_code: 'GIAM20',
-    discount_percent: 20,
-    max_discount: 50000,
-    original_cost: 105000,
-    discount_amount: 21000,
-    total_cost: 84000
-  };
+  // Load booking data from backend
+  useEffect(() => {
+    const loadBooking = async () => {
+      if (!booking_id) {
+        setAlertModal({
+          show: true,
+          title: 'Lỗi',
+          message: 'Không tìm thấy mã đặt lịch',
+          type: 'error'
+        });
+        setLoadingBooking(false);
+        return;
+      }
+
+      try {
+        setLoadingBooking(true);
+        const response = await bookingService.getBookingById(parseInt(booking_id));
+        
+        if (response.success && response.data) {
+          const bookingData = response.data;
+          
+          // Format booking data for display
+          const formattedBooking = {
+            booking_id: bookingData.booking_id,
+            station_name: bookingData.station?.station_name || 'N/A',
+            vehicle_type: bookingData.vehicle_type,
+            actual_start: bookingData.actual_start || bookingData.start_time,
+            actual_end: bookingData.actual_end || bookingData.end_time,
+            start_battery_percent: bookingData.chargingSession?.start_battery_percent || 0,
+            end_battery_percent: bookingData.chargingSession?.end_battery_percent || bookingData.start_battery_percent || 0,
+            energy_consumed: bookingData.chargingSession?.energy_consumed || 0,
+            price_per_kwh: bookingData.station?.price_per_kwh || 0,
+            promotion_code: bookingData.promotion?.code || null,
+            discount_percent: bookingData.promotion?.discount_percent || 0,
+            max_discount: bookingData.promotion?.max_discount || 0,
+            original_cost: bookingData.total_cost || 0,
+            discount_amount: bookingData.discount_amount || 0,
+            total_cost: bookingData.total_cost || 0
+          };
+          
+          setBooking(formattedBooking);
+        } else {
+          throw new Error('Không tìm thấy thông tin đặt lịch');
+        }
+      } catch (error: any) {
+        console.error('Error loading booking:', error);
+        setAlertModal({
+          show: true,
+          title: 'Lỗi',
+          message: error.message || 'Không thể tải thông tin đặt lịch',
+          type: 'error'
+        });
+      } finally {
+        setLoadingBooking(false);
+      }
+    };
+
+    loadBooking();
+  }, [booking_id]);
 
   // Get vehicle type label
   const getVehicleTypeLabel = (type: string) => {
@@ -64,41 +107,28 @@ const Payment = () => {
   };
 
   const handlePayment = async () => {
+    if (!booking_id || !booking) {
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: 'Thông tin đặt lịch không hợp lệ',
+        type: 'error'
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Mock payment processing
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Initialize VNPay payment
+      const response = await paymentService.vnpayInit(parseInt(booking_id));
       
-      const user = authService.getCurrentUser();
-      
-      // Add completed booking to mockBookings
-      const newBooking = {
-        booking_id: getNextId(mockBookings, 'booking_id'),
-        user_id: user?.user_id || 1,
-        station_id: 1,
-        port_id: 1,
-        start_time: booking.actual_start || new Date().toISOString(),
-        end_time: booking.actual_end || new Date().toISOString(),
-        status: 'completed',
-        total_kwh: booking.energy_consumed || 0,
-        total_price: booking.total_cost || 0,
-        payment_status: 'paid'
-      };
-      
-      mockBookings.push(newBooking);
-      
-      // Mock success
-      setAlertModal({
-        show: true,
-        title: 'Thành công!',
-        message: 'Thanh toán thành công!',
-        type: 'success'
-      });
-      
-      setTimeout(() => {
-        navigate('/bookings/history');
-      }, 1500);
+      if (response.success && response.data?.redirect_url) {
+        // Redirect to VNPay payment page
+        window.location.href = response.data.redirect_url;
+      } else {
+        throw new Error('Không thể khởi tạo thanh toán');
+      }
     } catch (error: any) {
       console.error('Payment error:', error);
       setAlertModal({
@@ -107,10 +137,38 @@ const Payment = () => {
         message: error.message || 'Thanh toán thất bại, vui lòng thử lại',
         type: 'error'
       });
-    } finally {
       setLoading(false);
     }
   };
+
+  if (loadingBooking) {
+    return (
+      <div className="payment-page">
+        <div className="payment-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+          <Loader2 size={48} className="animate-spin" style={{ color: '#10b981' }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!booking) {
+    return (
+      <div className="payment-page">
+        <div className="payment-container">
+          <button className="back-button" onClick={() => navigate(-1)}>
+            <ArrowLeft size={20} />
+            <span>Quay lại</span>
+          </button>
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <p>Không tìm thấy thông tin đặt lịch</p>
+            <button onClick={() => navigate('/bookings/history')} style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+              Về lịch sử đặt lịch
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="payment-page">
