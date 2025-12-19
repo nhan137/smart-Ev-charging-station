@@ -338,31 +338,28 @@ exports.getBookingHistory = async (req, res, next) => {
     const stationIds = stations.map(s => s.station_id);
 
     // 2. Build WHERE clause cho bookings
-    // Lịch sử chỉ hiển thị booking đã phê duyệt/hủy/hoàn thành (không hiển thị pending)
+    // Lịch sử chỉ hiển thị booking đã finalized: cancelled, confirmed (approved), completed
+    // EXCLUDE: pending, charging
     const whereConditions = {
       station_id: { [Op.in]: stationIds },
-      status: { [Op.in]: ['confirmed', 'cancelled', 'completed', 'charging'] } // Bỏ 'pending'
+      status: { [Op.in]: ['confirmed', 'cancelled', 'completed'] } // Only finalized statuses
     };
 
-    // Filter by status (nếu có)
-    if (status && status !== 'all') {
-      if (status === 'confirmed') {
-        whereConditions.status = 'confirmed';
-      } else if (status === 'completed') {
-        whereConditions.status = 'completed';
-      } else if (status === 'cancelled') {
-        whereConditions.status = 'cancelled';
-      } else if (status === 'charging') {
-        whereConditions.status = 'charging';
+    // Filter by status (nếu có) - chỉ cho phép finalized statuses
+    if (status && status !== 'all' && status !== '') {
+      if (['confirmed', 'cancelled', 'completed'].includes(status)) {
+        whereConditions.status = status;
       }
-      // Không filter 'pending' vì không hiển thị trong lịch sử
+      // Ignore pending and charging filters - not shown in history
     }
 
     // Filter by date range
     if (from_date || to_date) {
       whereConditions.start_time = {};
       if (from_date) {
-        whereConditions.start_time[Op.gte] = new Date(from_date);
+        const startDate = new Date(from_date);
+        startDate.setHours(0, 0, 0, 0);
+        whereConditions.start_time[Op.gte] = startDate;
       }
       if (to_date) {
         const endDate = new Date(to_date);
@@ -371,9 +368,12 @@ exports.getBookingHistory = async (req, res, next) => {
       }
     }
 
-    // 3. Calculate overview stats (Tổng booking, Hoàn thành, Chờ xử lý, Doanh thu)
-    const allBookings = await Booking.findAll({
-      where: { station_id: { [Op.in]: stationIds } },
+    // 3. Calculate overview stats (chỉ tính các finalized bookings)
+    const allHistoryBookings = await Booking.findAll({
+      where: {
+        station_id: { [Op.in]: stationIds },
+        status: { [Op.in]: ['confirmed', 'cancelled', 'completed'] }
+      },
       include: [
         {
           model: User,
@@ -391,27 +391,26 @@ exports.getBookingHistory = async (req, res, next) => {
       attributes: ['booking_id', 'status', 'total_cost']
     });
 
-    // Tính overview: chỉ đếm các booking đã phê duyệt/hủy/hoàn thành (không đếm pending)
-    const historyBookings = allBookings.filter(b => 
-      ['confirmed', 'cancelled', 'completed', 'charging'].includes(b.status)
-    );
-
     const overview = {
-      total: historyBookings.length,
-      completed: historyBookings.filter(b => b.status === 'completed').length,
-      pending: allBookings.filter(b => b.status === 'pending').length, // Vẫn đếm pending để hiển thị trong overview
-      revenue: historyBookings
+      total: allHistoryBookings.length,
+      completed: allHistoryBookings.filter(b => b.status === 'completed').length,
+      pending: 0, // No pending in history view
+      revenue: allHistoryBookings
         .filter(b => b.status === 'completed')
         .reduce((sum, b) => sum + (parseFloat(b.total_cost) || 0), 0)
     };
 
-    // 4. Apply search filter (nếu có)
+    // 4. Build search conditions (if provided)
+    // Search in user name, email, station name, or booking ID
     if (search && search.trim()) {
-      const searchTerm = `%${search.trim()}%`;
+      const searchTerm = search.trim();
+      // Use Sequelize.literal for complex search across related tables
+      const { sequelize } = require('../config/database');
       whereConditions[Op.or] = [
-        { '$user.full_name$': { [Op.like]: searchTerm } },
-        { '$user.email$': { [Op.like]: searchTerm } },
-        { '$station.station_name$': { [Op.like]: searchTerm } }
+        sequelize.literal(`user.full_name LIKE '%${searchTerm.replace(/'/g, "''")}%'`),
+        sequelize.literal(`user.email LIKE '%${searchTerm.replace(/'/g, "''")}%'`),
+        sequelize.literal(`station.station_name LIKE '%${searchTerm.replace(/'/g, "''")}%'`),
+        sequelize.literal(`CAST(Booking.booking_id AS CHAR) LIKE '%${searchTerm.replace(/'/g, "''")}%'`)
       ];
     }
 
@@ -445,7 +444,8 @@ exports.getBookingHistory = async (req, res, next) => {
       ],
       order: [['created_at', 'DESC']],
       limit: parseInt(limit),
-      offset: offset
+      offset: offset,
+      distinct: true // Important for accurate count with includes
     });
 
     // 6. Format response
@@ -459,11 +459,9 @@ exports.getBookingHistory = async (req, res, next) => {
         'oto_ccs': 'Ô tô CCS'
       };
 
-      // Map status to display name
+      // Map status to display name (only finalized statuses in history)
       const statusMap = {
-        'pending': 'Chờ xác nhận',
         'confirmed': 'Đã xác nhận',
-        'charging': 'Đang sạc',
         'completed': 'Hoàn thành',
         'cancelled': 'Đã hủy'
       };
@@ -473,24 +471,6 @@ exports.getBookingHistory = async (req, res, next) => {
       const endTime = new Date(bookingData.end_time);
       const dateStr = startTime.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const timeStr = `${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}-${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-
-      // Xác định display_message dựa trên status
-      // Lịch sử chỉ hiển thị text, không có nút
-      let displayMessage = null;
-
-      if (bookingData.status === 'confirmed') {
-        // Đã phê duyệt → Hiển thị text "Đặt lịch thành công"
-        displayMessage = 'Đặt lịch thành công';
-      } else if (bookingData.status === 'cancelled') {
-        // Đã hủy → Hiển thị text "Đặt lịch thất bại"
-        displayMessage = 'Đặt lịch thất bại';
-      } else if (bookingData.status === 'completed') {
-        // Hoàn thành → Có thể hiển thị "Hoàn thành" hoặc để null
-        displayMessage = 'Hoàn thành';
-      } else if (bookingData.status === 'charging') {
-        // Đang sạc → Hiển thị "Đang sạc"
-        displayMessage = 'Đang sạc';
-      }
 
       return {
         booking_id: bookingData.booking_id,
@@ -512,9 +492,7 @@ exports.getBookingHistory = async (req, res, next) => {
         status: bookingData.status,
         status_label: statusMap[bookingData.status] || bookingData.status,
         total_cost: bookingData.total_cost ? parseFloat(bookingData.total_cost) : 0,
-        created_at: bookingData.created_at,
-        // display_message: Text hiển thị trong cột "THAO TÁC" (lịch sử chỉ có text, không có nút)
-        display_message: displayMessage // "Đặt lịch thành công" | "Đặt lịch thất bại" | "Hoàn thành" | "Đang sạc"
+        created_at: bookingData.created_at
       };
     });
 

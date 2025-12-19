@@ -7,10 +7,13 @@ import './BookingHistory.css';
 
 const BookingHistory = () => {
   const [bookings, setBookings] = useState<any[]>([]);
+  const [overview, setOverview] = useState<any>({ total: 0, completed: 0, pending: 0, revenue: 0 });
+  const [pagination, setPagination] = useState<any>({ total: 0, page: 1, limit: 10, totalPages: 1 });
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [loading, setLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: string; bookingId: number } | null>(null);
@@ -22,8 +25,13 @@ const BookingHistory = () => {
   });
 
   useEffect(() => {
-    loadData();
+    // Reset to page 1 when filters change
+    setCurrentPage(1);
   }, [filterStatus, filterStartDate, filterEndDate, searchTerm]);
+
+  useEffect(() => {
+    loadData();
+  }, [filterStatus, filterStartDate, filterEndDate, searchTerm, currentPage]);
 
   const loadData = async () => {
     try {
@@ -32,52 +40,37 @@ const BookingHistory = () => {
         status: filterStatus || undefined,
         start_date: filterStartDate || undefined,
         end_date: filterEndDate || undefined,
-        search: searchTerm || undefined
+        search: searchTerm || undefined,
+        page: currentPage,
+        limit: 10
       });
       
       if (response.success && response.data) {
-        setBookings(Array.isArray(response.data) ? response.data : []);
+        // API returns { overview, bookings, pagination }
+        const data = response.data;
+        setBookings(Array.isArray(data.bookings) ? data.bookings : []);
+        setOverview(data.overview || { total: 0, completed: 0, pending: 0, revenue: 0 });
+        const paginationData = data.pagination || { total: 0, page: 1, limit: 10, totalPages: 1 };
+        setPagination(paginationData);
+        // Update currentPage to match backend response
+        setCurrentPage(paginationData.page || 1);
       } else {
         setBookings([]);
+        setOverview({ total: 0, completed: 0, pending: 0, revenue: 0 });
+        setPagination({ total: 0, page: 1, limit: 10, totalPages: 1 });
       }
     } catch (error: any) {
       console.error('Error loading booking history:', error);
-      // Set empty array instead of showing error modal immediately
-      // Error will be shown if user tries to interact
       setBookings([]);
+      setOverview({ total: 0, completed: 0, pending: 0, revenue: 0 });
+      setPagination({ total: 0, page: 1, limit: 10, totalPages: 1 });
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredBookings = bookings.filter(booking => {
-    if (filterStatus && booking.status !== filterStatus) return false;
-    
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      if (!booking.user_name.toLowerCase().includes(search) && 
-          !booking.user_email.toLowerCase().includes(search) &&
-          !booking.station_name.toLowerCase().includes(search)) {
-        return false;
-      }
-    }
-    
-    const bookingDate = new Date(booking.start_time);
-    
-    if (filterStartDate) {
-      const startDate = new Date(filterStartDate);
-      startDate.setHours(0, 0, 0, 0);
-      if (bookingDate < startDate) return false;
-    }
-    
-    if (filterEndDate) {
-      const endDate = new Date(filterEndDate);
-      endDate.setHours(23, 59, 59, 999);
-      if (bookingDate > endDate) return false;
-    }
-    
-    return true;
-  });
+  // No client-side filtering needed - backend handles all filters
+  const filteredBookings = bookings;
 
   const getVehicleTypeLabel = (type: string) => {
     const typeMap: any = {
@@ -174,12 +167,12 @@ const BookingHistory = () => {
     return contents[confirmAction.type] || contents.confirm;
   };
 
-  // Thống kê
+  // Use overview stats from API
   const stats = {
-    total: bookings.length,
-    completed: bookings.filter(b => b.status === 'completed').length,
-    pending: bookings.filter(b => b.status === 'pending').length,
-    totalRevenue: bookings.filter(b => b.status === 'completed').reduce((sum, b) => sum + b.total_cost, 0)
+    total: overview.total || 0,
+    completed: overview.completed || 0,
+    pending: overview.pending || 0,
+    totalRevenue: overview.revenue || 0
   };
 
   return (
@@ -250,9 +243,7 @@ const BookingHistory = () => {
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="">Tất cả trạng thái</option>
-            <option value="pending">Chờ xác nhận</option>
             <option value="confirmed">Đã xác nhận</option>
-            <option value="charging">Đang sạc</option>
             <option value="completed">Hoàn thành</option>
             <option value="cancelled">Đã hủy</option>
           </select>
@@ -312,20 +303,20 @@ const BookingHistory = () => {
               ) : (
               filteredBookings.map((booking) => (
                 <tr key={booking.booking_id}>
-                  <td className="id-cell">#{booking.booking_id}</td>
+                  <td className="id-cell">{booking.booking_code || `#${booking.booking_id}`}</td>
                   <td>
                     <div className="user-cell">
                       <User size={16} />
                       <div className="user-details">
-                        <span className="user-name">{booking.user_name}</span>
-                        <span className="user-email">{booking.user_email}</span>
+                        <span className="user-name">{booking.customer?.name || booking.user_name || 'N/A'}</span>
+                        <span className="user-email">{booking.customer?.email || booking.user_email || 'N/A'}</span>
                       </div>
                     </div>
                   </td>
                   <td>
                     <div className="station-cell">
                       <MapPin size={16} />
-                      <span>{booking.station_name}</span>
+                      <span>{booking.station?.name || booking.station_name || 'N/A'}</span>
                     </div>
                   </td>
                   <td>
@@ -338,10 +329,11 @@ const BookingHistory = () => {
                     <div className="time-cell">
                       <Clock size={14} />
                       <div className="time-details">
-                        <span>{new Date(booking.start_time).toLocaleDateString('vi-VN')}</span>
+                        <span>{booking.time?.date || (booking.start_time ? new Date(booking.start_time).toLocaleDateString('vi-VN') : 'N/A')}</span>
                         <span className="time-range">
-                          {new Date(booking.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - 
-                          {new Date(booking.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          {booking.time?.range || (booking.start_time && booking.end_time ? 
+                            `${new Date(booking.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${new Date(booking.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : 
+                            'N/A')}
                         </span>
                       </div>
                     </div>
@@ -350,35 +342,12 @@ const BookingHistory = () => {
                   <td>
                     <div className="price-cell">
                       <DollarSign size={14} />
-                      <span>{booking.total_cost.toLocaleString()}đ</span>
+                      <span>{(booking.total_cost || 0).toLocaleString()}đ</span>
                     </div>
                   </td>
                   <td>
                     <div className="action-buttons">
-                      {booking.status === 'pending' && (
-                        <>
-                          <button
-                            className="action-btn-text"
-                            onClick={() => handleAction('confirm', booking.booking_id)}
-                          >
-                            Xác nhận
-                          </button>
-                          <button
-                            className="action-btn-text"
-                            onClick={() => handleAction('cancel', booking.booking_id)}
-                          >
-                            Hủy
-                          </button>
-                        </>
-                      )}
-                      {booking.status === 'confirmed' && (
-                        <button
-                          className="action-btn-text"
-                          onClick={() => handleAction('cancel', booking.booking_id)}
-                        >
-                          Hủy
-                        </button>
-                      )}
+                      {/* Only show "View Details" button - this is history view */}
                       <button
                         className="action-btn-text"
                         onClick={() => {/* TODO: Show detail modal */}}
@@ -392,6 +361,29 @@ const BookingHistory = () => {
             )}
           </tbody>
         </table>
+        )}
+
+        {/* Pagination */}
+        {pagination.totalPages > 1 && (
+          <div className="pagination-container">
+            <button
+              className="pagination-btn"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1 || loading}
+            >
+              Trước
+            </button>
+            <div className="pagination-info">
+              Trang {pagination.page} / {pagination.totalPages} ({pagination.total} booking)
+            </div>
+            <button
+              className="pagination-btn"
+              onClick={() => setCurrentPage(prev => Math.min(pagination.totalPages, prev + 1))}
+              disabled={currentPage >= pagination.totalPages || loading}
+            >
+              Sau
+            </button>
+          </div>
         )}
       </div>
 

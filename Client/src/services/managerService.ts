@@ -79,13 +79,17 @@ export const managerService = {
     start_date?: string;
     end_date?: string;
     search?: string;
+    page?: number;
+    limit?: number;
   }) => {
     try {
       const params = new URLSearchParams();
       if (filters?.status) params.append('status', filters.status);
-      if (filters?.start_date) params.append('start_date', filters.start_date);
-      if (filters?.end_date) params.append('end_date', filters.end_date);
+      if (filters?.start_date) params.append('from_date', filters.start_date);
+      if (filters?.end_date) params.append('to_date', filters.end_date);
       if (filters?.search) params.append('search', filters.search);
+      if (filters?.page) params.append('page', filters.page.toString());
+      if (filters?.limit) params.append('limit', filters.limit.toString());
       
       const response = await api.get(`/manager/bookings/history?${params.toString()}`);
       return response.data;
