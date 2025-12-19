@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Filter, Search, Plus, MapPin, Zap, DollarSign } from 'lucide-react';
-import { mockStations, mockUsers } from '../../services/mockData';
+import { Filter, Search, Plus, MapPin, Zap, DollarSign, Loader2 } from 'lucide-react';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
 import StationFormModal from './components/StationFormModal';
 import StationDetailModal from '../User/components/StationDetailModal';
+import { adminService } from '../../services/adminService';
 import './StationManagement.css';
 
 interface Station {
@@ -25,11 +25,20 @@ interface Station {
   avatar_url?: string;
 }
 
+interface Manager {
+  user_id: number;
+  full_name: string;
+  email: string;
+}
+
 const StationManagement = () => {
   const [stations, setStations] = useState<Station[]>([]);
+  const [managers, setManagers] = useState<Manager[]>([]);
+  const [stationStats, setStationStats] = useState({ total: 0, active: 0, totalSlots: 0, availableSlots: 0 });
   const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   const [confirmModal, setConfirmModal] = useState({
     show: false,
     title: '',
@@ -52,39 +61,119 @@ const StationManagement = () => {
     station: null as Station | null
   });
 
-  // Get managers from mockUsers
-  const managers = mockUsers.filter(u => u.role === 'manager').map(u => ({
-    user_id: u.user_id,
-    full_name: u.full_name
-  }));
-
   useEffect(() => {
     loadStations();
-  }, []);
+    loadStationStats();
+    loadManagers();
+  }, [filterType, filterStatus, searchQuery]);
 
-  const loadStations = () => {
-    // Add status to mock stations
-    const stationsWithStatus = mockStations.map(s => ({
-      ...s,
-      status: s.status || 'active',
-      opening_hours: s.opening_hours || '24/7',
-      contact_phone: s.contact_phone || '0236-3888-999'
-    }));
-    setStations(stationsWithStatus);
+  const loadManagers = async () => {
+    try {
+      // Load users with role 'manager' from admin service
+      const response = await adminService.getUsers({ role_id: '2', limit: 100 }); // role_id 2 = manager
+      if (response.success && response.data) {
+        const usersData = Array.isArray(response.data) ? response.data : (response.data.users || []);
+        const managersList = usersData
+          .filter((user: any) => user.role === 'manager' || user.role_id === 2)
+          .map((user: any) => ({
+            user_id: user.user_id,
+            full_name: user.full_name,
+            email: user.email
+          }));
+        setManagers(managersList);
+        console.log('[StationManagement] Loaded managers:', managersList.length);
+      }
+    } catch (error: any) {
+      console.error('Error loading managers:', error);
+      setManagers([]);
+    }
   };
 
-  const filteredStations = stations.filter(station => {
-    if (filterType && station.station_type !== filterType) return false;
-    if (filterStatus && station.status !== filterStatus) return false;
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        station.station_name.toLowerCase().includes(query) ||
-        station.address.toLowerCase().includes(query)
-      );
+  const loadStationStats = async () => {
+    try {
+      const response = await adminService.getStationStats();
+      if (response.success && response.data) {
+        setStationStats({
+          total: response.data.total || 0,
+          active: response.data.active || 0,
+          totalSlots: response.data.total_slots || 0,
+          availableSlots: response.data.available_slots || 0
+        });
+      }
+    } catch (error: any) {
+      console.error('Error loading station stats:', error);
     }
-    return true;
-  });
+  };
+
+  const loadStations = async () => {
+    try {
+      setLoading(true);
+      const params: any = {
+        page: 1,
+        limit: 100
+      };
+      
+      if (filterType) params.type = filterType;
+      if (filterStatus) params.status = filterStatus;
+      if (searchQuery) params.search = searchQuery;
+
+      const response = await adminService.getStations(params);
+      console.log('[StationManagement] API Response:', response);
+      
+      if (response.success && response.data) {
+        // Backend trả về { stations: [...], pagination: {...} }
+        let stationsData: any[] = [];
+        if (Array.isArray(response.data)) {
+          stationsData = response.data;
+        } else if (response.data.stations && Array.isArray(response.data.stations)) {
+          stationsData = response.data.stations;
+        } else if (response.data.rows && Array.isArray(response.data.rows)) {
+          stationsData = response.data.rows;
+        }
+        
+        console.log('[StationManagement] Loaded stations:', stationsData.length, stationsData);
+        
+        if (stationsData.length > 0) {
+          const formattedStations = stationsData.map((station: any) => ({
+            station_id: station.station_id,
+            station_name: station.station_name,
+            address: station.address,
+            latitude: station.latitude,
+            longitude: station.longitude,
+            station_type: station.station_type,
+            price_per_kwh: station.price_per_kwh,
+            charging_power: station.charging_power,
+            connector_types: station.connector_types,
+            opening_hours: station.opening_hours || '24/7',
+            contact_phone: station.contact_phone || '',
+            available_slots: station.available_slots || 0,
+            total_slots: station.total_slots || 0,
+            status: station.status || 'active',
+            avatar_url: station.avatar_url
+          }));
+          setStations(formattedStations);
+        } else {
+          console.warn('[StationManagement] No stations found in response');
+          setStations([]);
+        }
+      } else {
+        console.error('[StationManagement] API response not successful:', response);
+        setStations([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading stations:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải danh sách trạm sạc',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredStations = stations; // Backend already filters
 
   const handleDeleteStation = (station: Station) => {
     setConfirmModal({
@@ -94,9 +183,7 @@ const StationManagement = () => {
       type: 'danger',
       onConfirm: async () => {
         try {
-          // TODO: Call API
-          // await stationService.deleteStation(station.station_id);
-          
+          await adminService.deleteStation(station.station_id);
           setAlertModal({
             show: true,
             title: 'Thành công!',
@@ -104,6 +191,7 @@ const StationManagement = () => {
             type: 'success'
           });
           loadStations();
+          loadStationStats();
         } catch (error: any) {
           setAlertModal({
             show: true,
@@ -118,27 +206,29 @@ const StationManagement = () => {
 
   const handleSubmitStation = async (data: any) => {
     try {
-      // TODO: Call API
       if (formModal.station) {
         // Update existing station
-        // await stationService.updateStation(formModal.station.station_id, data);
+        await adminService.updateStation(formModal.station.station_id, data);
         setAlertModal({
           show: true,
           title: 'Thành công!',
           message: `Đã cập nhật trạm sạc ${data.station_name}`,
           type: 'success'
         });
+        setFormModal({ show: false, station: null });
       } else {
         // Create new station
-        // await stationService.createStation(data);
+        await adminService.createStation(data);
         setAlertModal({
           show: true,
           title: 'Thành công!',
           message: `Đã thêm trạm sạc ${data.station_name}`,
           type: 'success'
         });
+        setFormModal({ show: false, station: null });
       }
       loadStations();
+      loadStationStats();
     } catch (error: any) {
       setAlertModal({
         show: true,
@@ -168,6 +258,9 @@ const StationManagement = () => {
     const config = statusConfig[status] || statusConfig['active'];
     return <span className={`status-badge ${config.class}`}>{config.label}</span>;
   };
+
+  // Debug: Log current state
+  console.log('[StationManagement] Render - stations:', stations.length, 'loading:', loading, 'filteredStations:', filteredStations.length);
 
   return (
     <div className="station-management">
@@ -221,97 +314,110 @@ const StationManagement = () => {
       {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-value">{stations.length}</div>
+          <div className="stat-value">{stationStats.total}</div>
           <div className="stat-label">Tổng trạm sạc</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stations.filter(s => s.status === 'active').length}</div>
+          <div className="stat-value">{stationStats.active}</div>
           <div className="stat-label">Đang hoạt động</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stations.reduce((sum, s) => sum + s.total_slots, 0)}</div>
+          <div className="stat-value">{stationStats.totalSlots}</div>
           <div className="stat-label">Tổng số chỗ</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stations.reduce((sum, s) => sum + s.available_slots, 0)}</div>
+          <div className="stat-value">{stationStats.availableSlots}</div>
           <div className="stat-label">Chỗ trống</div>
         </div>
       </div>
 
       {/* Table */}
       <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Tên trạm</th>
-              <th>Địa chỉ</th>
-              <th>Loại trạm</th>
-              <th>Giá/kWh</th>
-              <th>Công suất</th>
-              <th>Số chỗ</th>
-              <th>Trạng thái</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredStations.map((station) => (
-              <tr key={station.station_id}>
-                <td className="id-cell">#{station.station_id}</td>
-                <td className="name-cell">
-                  <div className="station-name-cell">
-                    <MapPin size={16} />
-                    <span>{station.station_name}</span>
-                  </div>
-                </td>
-                <td className="address-cell">{station.address}</td>
-                <td>{getTypeBadge(station.station_type)}</td>
-                <td>
-                  <div className="price-cell">
-                    <DollarSign size={14} />
-                    <span>{station.price_per_kwh.toLocaleString()}đ</span>
-                  </div>
-                </td>
-                <td>
-                  <div className="power-cell">
-                    <Zap size={14} />
-                    <span>{station.charging_power}kW</span>
-                  </div>
-                </td>
-                <td>
-                  <div className="slots-cell">
-                    <span className="available">{station.available_slots}</span>
-                    <span className="separator">/</span>
-                    <span className="total">{station.total_slots}</span>
-                  </div>
-                </td>
-                <td>{getStatusBadge(station.status || 'active')}</td>
-                <td>
-                  <div className="action-buttons">
-                    <button
-                      className="action-btn-text"
-                      onClick={() => setFormModal({ show: true, station })}
-                    >
-                      Chỉnh sửa
-                    </button>
-                    <button
-                      className="action-btn-text"
-                      onClick={() => setDetailModal({ show: true, station })}
-                    >
-                      Xem chi tiết
-                    </button>
-                    <button
-                      className="action-btn-text"
-                      onClick={() => handleDeleteStation(station)}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </td>
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4rem', flexDirection: 'column', gap: '1rem' }}>
+            <Loader2 size={48} className="animate-spin" style={{ color: '#3b82f6' }} />
+            <p style={{ color: '#64748b', fontSize: '0.875rem' }}>Đang tải dữ liệu...</p>
+          </div>
+        ) : filteredStations.length === 0 ? (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4rem', flexDirection: 'column', gap: '1rem' }}>
+            <MapPin size={64} style={{ color: '#cbd5e1' }} />
+            <p style={{ color: '#64748b', fontSize: '1rem', fontWeight: 500 }}>Không có trạm sạc nào</p>
+            <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>Hãy thêm trạm sạc mới để bắt đầu</p>
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Tên trạm</th>
+                <th>Địa chỉ</th>
+                <th>Loại trạm</th>
+                <th>Giá/kWh</th>
+                <th>Công suất</th>
+                <th>Số chỗ</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredStations.map((station) => (
+                <tr key={station.station_id}>
+                  <td className="id-cell">#{station.station_id}</td>
+                  <td className="name-cell">
+                    <div className="station-name-cell">
+                      <MapPin size={16} />
+                      <span>{station.station_name}</span>
+                    </div>
+                  </td>
+                  <td className="address-cell">{station.address}</td>
+                  <td>{getTypeBadge(station.station_type)}</td>
+                  <td>
+                    <div className="price-cell">
+                      <DollarSign size={14} />
+                      <span>{station.price_per_kwh.toLocaleString()}đ</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="power-cell">
+                      <Zap size={14} />
+                      <span>{station.charging_power}kW</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="slots-cell">
+                      <span className="available">{station.available_slots}</span>
+                      <span className="separator">/</span>
+                      <span className="total">{station.total_slots}</span>
+                    </div>
+                  </td>
+                  <td>{getStatusBadge(station.status || 'active')}</td>
+                  <td>
+                    <div className="action-buttons">
+                      <button
+                        className="action-btn-text"
+                        onClick={() => setFormModal({ show: true, station })}
+                      >
+                        Chỉnh sửa
+                      </button>
+                      <button
+                        className="action-btn-text"
+                        onClick={() => setDetailModal({ show: true, station })}
+                      >
+                        Xem chi tiết
+                      </button>
+                      <button
+                        className="action-btn-text"
+                        onClick={() => handleDeleteStation(station)}
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Confirm Modal */}

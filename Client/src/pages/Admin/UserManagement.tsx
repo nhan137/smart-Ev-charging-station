@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Filter, Lock, Unlock, Edit, Trash2, Search, Eye, UserPlus } from 'lucide-react';
+import { Filter, Lock, Unlock, Edit, Trash2, Search, Eye, UserPlus, Loader2 } from 'lucide-react';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
 import UserDetailModal from './components/UserDetailModal';
 import EditUserModal from './components/EditUserModal';
 import CreateUserModal from './components/CreateUserModal';
+import { adminService } from '../../services/adminService';
 import './UserManagement.css';
 
 interface User {
@@ -20,9 +21,11 @@ interface User {
 
 const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [userStats, setUserStats] = useState({ total: 0, active: 0, locked: 0 });
   const [filterRole, setFilterRole] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   const [confirmModal, setConfirmModal] = useState({
     show: false,
     title: '',
@@ -54,68 +57,65 @@ const UserManagement = () => {
 
   useEffect(() => {
     loadUsers();
-  }, []);
+    loadUserStats();
+  }, [filterRole, filterStatus, searchQuery]);
 
-  const loadUsers = () => {
-    // Mock data
-    const mockUsers: User[] = [
-      {
-        user_id: 1,
-        full_name: 'Nguyễn Văn A',
-        email: 'nguyenvana@gmail.com',
-        phone: '0901234567',
-        role_id: 1,
-        role_name: 'User',
-        status: 'active',
-        created_at: '2025-01-15T10:00:00'
-      },
-      {
-        user_id: 2,
-        full_name: 'Trần Thị B',
-        email: 'tranthib@gmail.com',
-        phone: '0901234568',
-        role_id: 2,
-        role_name: 'Manager',
-        status: 'active',
-        created_at: '2025-01-16T11:00:00'
-      },
-      {
-        user_id: 3,
-        full_name: 'Lê Văn C',
-        email: 'levanc@gmail.com',
-        phone: '0901234569',
-        role_id: 1,
-        role_name: 'User',
-        status: 'locked',
-        created_at: '2025-01-17T12:00:00'
-      },
-      {
-        user_id: 4,
-        full_name: 'Admin System',
-        email: 'admin@evcharge.com',
-        phone: '0236388899',
-        role_id: 3,
-        role_name: 'Admin',
-        status: 'active',
-        created_at: '2025-01-01T00:00:00'
+  const loadUserStats = async () => {
+    try {
+      const response = await adminService.getUserStats();
+      if (response.success && response.data) {
+        setUserStats({
+          total: response.data.total || 0,
+          active: response.data.active || 0,
+          locked: response.data.locked || 0
+        });
       }
-    ];
-    setUsers(mockUsers);
+    } catch (error: any) {
+      console.error('Error loading user stats:', error);
+    }
   };
 
-  const filteredUsers = users.filter(user => {
-    if (filterRole && user.role_id !== Number(filterRole)) return false;
-    if (filterStatus && user.status !== filterStatus) return false;
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        user.full_name.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query) ||
-        user.phone.includes(query)
-      );
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const params: any = {
+        page: 1,
+        limit: 100
+      };
+      
+      if (filterRole) params.role_id = filterRole;
+      if (filterStatus) params.status = filterStatus;
+      if (searchQuery) params.search = searchQuery;
+
+      const response = await adminService.getUsers(params);
+      if (response.success && response.data) {
+        const usersData = Array.isArray(response.data) ? response.data : (response.data.users || []);
+        const formattedUsers = usersData.map((user: any) => ({
+          user_id: user.user_id,
+          full_name: user.full_name,
+          email: user.email,
+          phone: user.phone || '',
+          role_id: user.role_id,
+          role_name: user.role?.role_name || (user.role_id === 1 ? 'User' : user.role_id === 2 ? 'Manager' : 'Admin'),
+          status: user.status || 'active',
+          created_at: user.created_at
+        }));
+        setUsers(formattedUsers);
+      }
+    } catch (error: any) {
+      console.error('Error loading users:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải danh sách người dùng',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
-    return true;
-  });
+  };
+
+  const filteredUsers = users; // Backend already filters
 
   const handleLockUser = (user: User) => {
     setConfirmModal({
@@ -125,9 +125,7 @@ const UserManagement = () => {
       type: 'warning',
       onConfirm: async () => {
         try {
-          // TODO: Call API
-          // await userService.lockUser(user.user_id);
-          
+          await adminService.updateUserStatus(user.user_id, 'locked');
           setAlertModal({
             show: true,
             title: 'Thành công!',
@@ -135,6 +133,7 @@ const UserManagement = () => {
             type: 'success'
           });
           loadUsers();
+          loadUserStats();
         } catch (error: any) {
           setAlertModal({
             show: true,
@@ -155,9 +154,7 @@ const UserManagement = () => {
       type: 'info',
       onConfirm: async () => {
         try {
-          // TODO: Call API
-          // await userService.unlockUser(user.user_id);
-          
+          await adminService.updateUserStatus(user.user_id, 'active');
           setAlertModal({
             show: true,
             title: 'Thành công!',
@@ -165,6 +162,7 @@ const UserManagement = () => {
             type: 'success'
           });
           loadUsers();
+          loadUserStats();
         } catch (error: any) {
           setAlertModal({
             show: true,
@@ -185,9 +183,7 @@ const UserManagement = () => {
       type: 'danger',
       onConfirm: async () => {
         try {
-          // TODO: Call API
-          // await userService.deleteUser(user.user_id);
-          
+          await adminService.deleteUser(user.user_id);
           setAlertModal({
             show: true,
             title: 'Thành công!',
@@ -195,6 +191,7 @@ const UserManagement = () => {
             type: 'success'
           });
           loadUsers();
+          loadUserStats();
         } catch (error: any) {
           setAlertModal({
             show: true,
@@ -211,15 +208,14 @@ const UserManagement = () => {
     if (!editModal.user) return;
 
     try {
-      // TODO: Call API
-      // await userService.updateUser(editModal.user.user_id, data);
-      
+      await adminService.updateUser(editModal.user.user_id, data);
       setAlertModal({
         show: true,
         title: 'Thành công!',
         message: `Đã cập nhật thông tin của ${data.full_name}`,
         type: 'success'
       });
+      setEditModal({ show: false, user: null });
       loadUsers();
     } catch (error: any) {
       setAlertModal({
@@ -233,16 +229,16 @@ const UserManagement = () => {
 
   const handleCreateUser = async (data: any) => {
     try {
-      // TODO: Call API
-      // await userService.createUser(data);
-      
+      await adminService.createUser(data);
       setAlertModal({
         show: true,
         title: 'Thành công!',
         message: `Đã tạo người dùng ${data.full_name}`,
         type: 'success'
       });
+      setCreateModal(false);
       loadUsers();
+      loadUserStats();
     } catch (error: any) {
       setAlertModal({
         show: true,
@@ -324,36 +320,42 @@ const UserManagement = () => {
       {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-value">{users.length}</div>
+          <div className="stat-value">{userStats.total}</div>
           <div className="stat-label">Tổng người dùng</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{users.filter(u => u.status === 'active').length}</div>
+          <div className="stat-value">{userStats.active}</div>
           <div className="stat-label">Đang hoạt động</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{users.filter(u => u.status === 'locked').length}</div>
+          <div className="stat-value">{userStats.locked}</div>
           <div className="stat-label">Đã khóa</div>
         </div>
       </div>
 
       {/* Table */}
       <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Họ tên</th>
-              <th>Email</th>
-              <th>SĐT</th>
-              <th>Vai trò</th>
-              <th>Trạng thái</th>
-              <th>Ngày tạo</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredUsers.map((user) => (
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+            <Loader2 size={32} className="animate-spin" style={{ color: '#3b82f6' }} />
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Họ tên</th>
+                <th>Email</th>
+                <th>SĐT</th>
+                <th>Vai trò</th>
+                <th>Trạng thái</th>
+                <th>Ngày tạo</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => (
               <tr key={user.user_id}>
                 <td className="id-cell">#{user.user_id}</td>
                 <td className="name-cell">{user.full_name}</td>
@@ -400,9 +402,17 @@ const UserManagement = () => {
                   </div>
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '2rem' }}>
+                    Không có dữ liệu
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Confirm Modal */}

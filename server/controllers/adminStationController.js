@@ -31,10 +31,10 @@ exports.getStationStats = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        total_stations,
-        active_stations,
-        total_slots,
-        available_slots
+        total: total_stations,
+        active: active_stations,
+        total_slots: total_slots,
+        available_slots: available_slots
       }
     });
   } catch (error) {

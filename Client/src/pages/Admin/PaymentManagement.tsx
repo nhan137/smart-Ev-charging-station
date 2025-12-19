@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Filter, Search, DollarSign, Download, CreditCard, TrendingUp } from 'lucide-react';
-import { mockStations } from '../../services/mockData';
+import { Filter, Search, DollarSign, Download, CreditCard, TrendingUp, Loader2 } from 'lucide-react';
 import AlertModal from '../../components/shared/AlertModal';
+import { adminService } from '../../services/adminService';
 import './PaymentManagement.css';
 
 interface Payment {
@@ -20,11 +20,13 @@ interface Payment {
 
 const PaymentManagement = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentStats, setPaymentStats] = useState({ totalRevenue: 0, pending: 0, successRate: 0, totalTransactions: 0 });
   const [filterStation, setFilterStation] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   const [alertModal, setAlertModal] = useState({
     show: false,
     title: '',
@@ -38,9 +40,71 @@ const PaymentManagement = () => {
 
   useEffect(() => {
     loadPayments();
-  }, []);
+    loadPaymentStats();
+  }, [filterStation, filterStatus, filterStartDate, filterEndDate, searchQuery]);
 
-  const loadPayments = () => {
+  const loadPaymentStats = async () => {
+    try {
+      const response = await adminService.getPaymentStats();
+      if (response.success && response.data) {
+        setPaymentStats({
+          totalRevenue: response.data.total_revenue || 0,
+          pending: response.data.pending_amount || 0,
+          successRate: response.data.success_rate || 0,
+          totalTransactions: response.data.total_transactions || 0
+        });
+      }
+    } catch (error: any) {
+      console.error('Error loading payment stats:', error);
+    }
+  };
+
+  const loadPayments = async () => {
+    try {
+      setLoading(true);
+      const params: any = {
+        page: 1,
+        limit: 100
+      };
+      
+      if (filterStation) params.station_id = filterStation;
+      if (filterStatus) params.status = filterStatus;
+      if (searchQuery) params.search = searchQuery;
+      if (filterStartDate) params.startDate = filterStartDate;
+      if (filterEndDate) params.endDate = filterEndDate;
+
+      const response = await adminService.getPayments(params);
+      if (response.success && response.data) {
+        const paymentsData = Array.isArray(response.data) ? response.data : (response.data.payments || []);
+        const formattedPayments = paymentsData.map((payment: any) => ({
+          payment_id: payment.payment_id,
+          booking_id: payment.booking_id,
+          user_id: payment.user_id,
+          user_name: payment.user?.full_name || payment.user_name || 'N/A',
+          station_id: payment.booking?.station_id || payment.station_id,
+          station_name: payment.booking?.station?.station_name || payment.station_name || 'N/A',
+          amount: parseFloat(payment.amount || 0),
+          method: payment.method || 'bank',
+          status: payment.status,
+          payment_date: payment.payment_date,
+          transaction_id: payment.transaction_id
+        }));
+        setPayments(formattedPayments);
+      }
+    } catch (error: any) {
+      console.error('Error loading payments:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải danh sách thanh toán',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPaymentsOld = () => {
     // Mock data
     const mockPayments: Payment[] = [
       {
@@ -119,76 +183,44 @@ const PaymentManagement = () => {
         transaction_id: 'TXN001234569'
       }
     ];
-    setPayments(mockPayments);
+    // setPayments(mockPayments); // Commented out - using API now
   };
 
-  const filteredPayments = payments.filter(payment => {
-    if (filterStation && payment.station_id !== Number(filterStation)) return false;
-    if (filterStatus && payment.status !== filterStatus) return false;
-    
-    const paymentDate = new Date(payment.payment_date);
-    
-    if (filterStartDate) {
-      const startDate = new Date(filterStartDate);
-      startDate.setHours(0, 0, 0, 0);
-      if (paymentDate < startDate) return false;
+  const filteredPayments = payments; // Backend already filters
+
+  const handleExportExcel = async () => {
+    try {
+      const params: any = {};
+      if (filterStatus) params.status = filterStatus;
+      if (filterStartDate) params.startDate = filterStartDate;
+      if (filterEndDate) params.endDate = filterEndDate;
+
+      const blob = await adminService.exportPayments(params);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `payments_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      setAlertModal({
+        show: true,
+        title: 'Thành công!',
+        message: 'Đã xuất file Excel thành công',
+        type: 'success'
+      });
+    } catch (error: any) {
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể xuất file',
+        type: 'error'
+      });
     }
-    
-    if (filterEndDate) {
-      const endDate = new Date(filterEndDate);
-      endDate.setHours(23, 59, 59, 999);
-      if (paymentDate > endDate) return false;
-    }
-
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        payment.user_name.toLowerCase().includes(query) ||
-        payment.station_name.toLowerCase().includes(query) ||
-        payment.payment_id.toString().includes(query) ||
-        payment.booking_id.toString().includes(query) ||
-        payment.transaction_id?.toLowerCase().includes(query)
-      );
-    }
-    
-    return true;
-  });
-
-  const handleExportExcel = () => {
-    // Convert to CSV
-    const headers = ['Mã TT', 'Mã Booking', 'Người TT', 'Trạm', 'Số tiền', 'Phương thức', 'Trạng thái', 'Ngày TT'];
-    const rows = filteredPayments.map(p => [
-      p.payment_id,
-      p.booking_id,
-      p.user_name,
-      p.station_name,
-      p.amount,
-      p.method,
-      p.status,
-      new Date(p.payment_date).toLocaleString('vi-VN')
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
-
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `payments_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    setAlertModal({
-      show: true,
-      title: 'Thành công!',
-      message: 'Đã xuất file Excel thành công',
-      type: 'success'
-    });
   };
 
   const getMethodBadge = (method: string) => {
@@ -210,14 +242,10 @@ const PaymentManagement = () => {
     return <span className={`status-badge ${config.class}`}>{config.label}</span>;
   };
 
-  // Calculate revenue stats
-  const totalRevenue = filteredPayments
-    .filter(p => p.status === 'success')
-    .reduce((sum, p) => sum + p.amount, 0);
-  
-  const pendingRevenue = filteredPayments
-    .filter(p => p.status === 'pending')
-    .reduce((sum, p) => sum + p.amount, 0);
+  // Use stats from API
+  const totalRevenue = paymentStats.totalRevenue;
+  const pendingRevenue = paymentStats.pending;
+  const successRate = paymentStats.successRate;
 
   return (
     <div className="payment-management">
@@ -241,7 +269,7 @@ const PaymentManagement = () => {
           <div className="revenue-content">
             <span className="revenue-label">Tổng doanh thu</span>
             <span className="revenue-value">{totalRevenue.toLocaleString()}đ</span>
-            <span className="revenue-note">Từ {filteredPayments.filter(p => p.status === 'success').length} giao dịch</span>
+            <span className="revenue-note">Từ {paymentStats.totalTransactions} giao dịch</span>
           </div>
         </div>
 
@@ -252,7 +280,7 @@ const PaymentManagement = () => {
           <div className="revenue-content">
             <span className="revenue-label">Chờ xử lý</span>
             <span className="revenue-value pending">{pendingRevenue.toLocaleString()}đ</span>
-            <span className="revenue-note">{filteredPayments.filter(p => p.status === 'pending').length} giao dịch</span>
+            <span className="revenue-note">{paymentStats.totalTransactions} giao dịch</span>
           </div>
         </div>
 
@@ -263,11 +291,9 @@ const PaymentManagement = () => {
           <div className="revenue-content">
             <span className="revenue-label">Tỷ lệ thành công</span>
             <span className="revenue-value success">
-              {filteredPayments.length > 0 
-                ? ((filteredPayments.filter(p => p.status === 'success').length / filteredPayments.length) * 100).toFixed(1)
-                : 0}%
+              {successRate.toFixed(1)}%
             </span>
-            <span className="revenue-note">Tổng {filteredPayments.length} giao dịch</span>
+            <span className="revenue-note">Tổng {paymentStats.totalTransactions} giao dịch</span>
           </div>
         </div>
       </div>
@@ -288,11 +314,7 @@ const PaymentManagement = () => {
           <Filter size={20} />
           <select value={filterStation} onChange={(e) => setFilterStation(e.target.value)}>
             <option value="">Tất cả trạm</option>
-            {mockStations.map((station) => (
-              <option key={station.station_id} value={station.station_id}>
-                {station.station_name}
-              </option>
-            ))}
+            {/* Stations will be loaded from API if needed */}
           </select>
         </div>
 
@@ -327,30 +349,35 @@ const PaymentManagement = () => {
 
       {/* Table */}
       <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Mã TT</th>
-              <th>Mã Booking</th>
-              <th>Người TT</th>
-              <th>Trạm</th>
-              <th>Số tiền</th>
-              <th>Phương thức</th>
-              <th>Trạng thái</th>
-              <th>Ngày TT</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPayments.length === 0 ? (
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+            <Loader2 size={32} className="animate-spin" style={{ color: '#3b82f6' }} />
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
               <tr>
-                <td colSpan={9} className="empty-row">
-                  <DollarSign size={48} />
-                  <p>Không có thanh toán nào</p>
-                </td>
+                <th>Mã TT</th>
+                <th>Mã Booking</th>
+                <th>Người TT</th>
+                <th>Trạm</th>
+                <th>Số tiền</th>
+                <th>Phương thức</th>
+                <th>Trạng thái</th>
+                <th>Ngày TT</th>
+                <th>Thao tác</th>
               </tr>
-            ) : (
-              filteredPayments.map((payment) => (
+            </thead>
+            <tbody>
+              {filteredPayments.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="empty-row">
+                    <DollarSign size={48} />
+                    <p>Không có thanh toán nào</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredPayments.map((payment) => (
                 <tr key={payment.payment_id}>
                   <td className="id-cell">#{payment.payment_id}</td>
                   <td className="booking-cell">#{payment.booking_id}</td>
@@ -376,10 +403,11 @@ const PaymentManagement = () => {
                     </button>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Alert Modal */}

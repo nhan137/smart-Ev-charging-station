@@ -1,126 +1,160 @@
-import { useState } from 'react';
-import { Users, Calendar, DollarSign, Zap, TrendingUp, AlertTriangle, Award, Filter, Bell, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Calendar, DollarSign, Zap, TrendingUp, AlertTriangle, Award, Filter, Bell, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { adminService } from '../../services/adminService';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
-  const [filterPeriod, setFilterPeriod] = useState<string>('month');
-  const [filterStation, setFilterStation] = useState<string>('');
+  const [filterPeriod, setFilterPeriod] = useState<'month' | 'year'>('month');
+  const [loading, setLoading] = useState(true);
+  
+  // KPI Data
+  const [kpiData, setKpiData] = useState({
+    totalUsers: 0,
+    totalBookings: 0,
+    totalRevenue: 0,
+    totalEnergy: 0
+  });
 
-  // Mock KPI Data
-  const kpiData = {
-    totalUsers: 1234,
-    totalBookings: 567,
-    totalRevenue: 125000000,
-    totalEnergy: 8450
+  // Statistics
+  const [statistics, setStatistics] = useState({
+    topStation: { name: 'N/A', count: 0 },
+    topUser: { name: 'N/A', amount: 0 },
+    cancelRate: 0,
+    maintenanceStations: 0
+  });
+
+  // Chart Data
+  const [revenueData, setRevenueData] = useState<any[]>([]);
+  const [stationTypeData, setStationTypeData] = useState<any[]>([]);
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [systemNotifications, setSystemNotifications] = useState<any[]>([]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [filterPeriod]);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load overview stats
+      const overviewRes = await adminService.getDashboardOverview(filterPeriod);
+      if (overviewRes.success && overviewRes.data) {
+        const data = overviewRes.data;
+        setKpiData({
+          totalUsers: data.total_users || 0,
+          totalBookings: data.total_bookings || 0,
+          totalRevenue: data.total_revenue || 0,
+          totalEnergy: data.total_kwh || 0
+        });
+      }
+
+      // Load highlights
+      const highlightsRes = await adminService.getDashboardHighlights();
+      if (highlightsRes.success && highlightsRes.data) {
+        const data = highlightsRes.data;
+        setStatistics({
+          topStation: {
+            name: data.top_station?.station_name || data.most_active_station?.station_name || 'Chưa có dữ liệu',
+            count: data.top_station?.total_bookings || data.most_active_station?.total_bookings || 0
+          },
+          topUser: {
+            name: data.top_spender?.full_name || data.top_spending_user?.full_name || 'Chưa có dữ liệu',
+            amount: data.top_spender?.total_spent || data.top_spending_user?.total_spent || 0
+          },
+          cancelRate: data.cancel_rate || data.cancellation_rate || 0,
+          maintenanceStations: data.maintenance_stations || 0
+        });
+      }
+
+      // Load revenue chart
+      const revenueRes = await adminService.getRevenueChart();
+      if (revenueRes.success && revenueRes.data) {
+        const data = revenueRes.data;
+        // Format data for chart
+        const formatted = data.map((item: any) => ({
+          month: item.month || item.date || 'N/A',
+          revenue: parseFloat(item.revenue || 0)
+        }));
+        setRevenueData(formatted);
+      }
+
+      // Load station types chart
+      const stationTypesRes = await adminService.getStationTypesChart();
+      if (stationTypesRes.success && stationTypesRes.data) {
+        const data = stationTypesRes.data;
+        const colors = ['#3b82f6', '#f59e0b', '#10b981'];
+        const formatted = data.map((item: any, index: number) => ({
+          name: item.type || 'N/A',
+          value: parseInt(item.count || 0),
+          color: colors[index % colors.length]
+        }));
+        setStationTypeData(formatted);
+      }
+
+      // Load recent activities
+      const activitiesRes = await adminService.getRecentActivities();
+      if (activitiesRes.success && activitiesRes.data) {
+        const data = activitiesRes.data;
+        // Format activities with icons
+        const formatted = data.map((item: any) => {
+          let icon = CheckCircle;
+          let color = '#10b981';
+          if (item.type === 'payment') {
+            icon = DollarSign;
+            color = '#3b82f6';
+          } else if (item.type === 'cancel') {
+            icon = XCircle;
+            color = '#ef4444';
+          } else if (item.type === 'maintenance') {
+            icon = AlertTriangle;
+            color = '#f59e0b';
+          } else if (item.type === 'user') {
+            icon = Users;
+            color = '#8b5cf6';
+          }
+          return {
+            id: item.id,
+            type: item.type,
+            icon,
+            color,
+            title: item.title || item.message || 'Hoạt động',
+            description: item.description || item.message || '',
+            time: item.time || item.created_at || 'Vừa xong'
+          };
+        });
+        setRecentActivities(formatted);
+      }
+
+      // System notifications from recent activities
+      if (activitiesRes.success && activitiesRes.data) {
+        const activities = activitiesRes.data;
+        const notifications = activities
+          .filter((a: any) => a.type === 'notification' || a.type === 'warning')
+          .slice(0, 3)
+          .map((item: any) => ({
+            id: item.id,
+            type: item.type === 'warning' ? 'warning' : 'info',
+            message: item.message || item.description || '',
+            time: item.time || item.created_at || 'Vừa xong'
+          }));
+        setSystemNotifications(notifications);
+      }
+    } catch (error: any) {
+      console.error('Error loading dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Mock Statistics
-  const statistics = {
-    topStation: { name: 'Trạm sạc Hải Châu', count: 250 },
-    topUser: { name: 'Nguyễn Văn A', amount: 5000000 },
-    cancelRate: 5.2,
-    maintenanceStations: 2
-  };
-
-  // Mock Revenue by Month (6 months)
-  const revenueData = [
-    { month: 'T7', revenue: 18000000 },
-    { month: 'T8', revenue: 22000000 },
-    { month: 'T9', revenue: 19500000 },
-    { month: 'T10', revenue: 25000000 },
-    { month: 'T11', revenue: 28000000 },
-    { month: 'T12', revenue: 32000000 }
-  ];
-
-  // Mock Station Type Distribution
-  const stationTypeData = [
-    { name: 'Xe máy', value: 180, color: '#3b82f6' },
-    { name: 'Ô tô', value: 220, color: '#f59e0b' },
-    { name: 'Cả hai', value: 167, color: '#10b981' }
-  ];
-
-  // Mock Booking Trend (7 days)
-  const bookingTrendData = [
-    { day: 'T2', bookings: 45 },
-    { day: 'T3', bookings: 52 },
-    { day: 'T4', bookings: 48 },
-    { day: 'T5', bookings: 61 },
-    { day: 'T6', bookings: 55 },
-    { day: 'T7', bookings: 73 },
-    { day: 'CN', bookings: 68 }
-  ];
-
-  // Mock Recent Activities
-  const recentActivities = [
-    {
-      id: 1,
-      type: 'booking',
-      icon: CheckCircle,
-      color: '#10b981',
-      title: 'Booking mới được tạo',
-      description: 'Nguyễn Văn A đặt lịch tại Trạm Hải Châu',
-      time: '5 phút trước'
-    },
-    {
-      id: 2,
-      type: 'payment',
-      icon: DollarSign,
-      color: '#3b82f6',
-      title: 'Thanh toán thành công',
-      description: 'Trần Thị B thanh toán 150,000đ',
-      time: '15 phút trước'
-    },
-    {
-      id: 3,
-      type: 'cancel',
-      icon: XCircle,
-      color: '#ef4444',
-      title: 'Booking bị hủy',
-      description: 'Lê Văn C hủy booking #1234',
-      time: '30 phút trước'
-    },
-    {
-      id: 4,
-      type: 'maintenance',
-      icon: AlertTriangle,
-      color: '#f59e0b',
-      title: 'Trạm cần bảo trì',
-      description: 'Trạm Thanh Khê báo lỗi connector',
-      time: '1 giờ trước'
-    },
-    {
-      id: 5,
-      type: 'user',
-      icon: Users,
-      color: '#8b5cf6',
-      title: 'User mới đăng ký',
-      description: 'Phạm Thị D vừa tạo tài khoản',
-      time: '2 giờ trước'
-    }
-  ];
-
-  // Mock System Notifications
-  const systemNotifications = [
-    {
-      id: 1,
-      type: 'warning',
-      message: 'Có 3 booking đang chờ xác nhận',
-      time: 'Vừa xong'
-    },
-    {
-      id: 2,
-      type: 'info',
-      message: 'Doanh thu tháng này tăng 15% so với tháng trước',
-      time: '1 giờ trước'
-    },
-    {
-      id: 3,
-      type: 'alert',
-      message: '2 trạm đang trong trạng thái bảo trì',
-      time: '3 giờ trước'
-    }
-  ];
+  if (loading) {
+    return (
+      <div className="admin-dashboard" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <Loader2 size={48} className="animate-spin" style={{ color: '#3b82f6' }} />
+      </div>
+    );
+  }
 
   return (
     <div className="admin-dashboard">
@@ -132,8 +166,7 @@ const AdminDashboard = () => {
         <div className="dashboard-filters">
           <div className="filter-group">
             <Filter size={20} />
-            <select value={filterPeriod} onChange={(e) => setFilterPeriod(e.target.value)}>
-              <option value="day">Ngày</option>
+            <select value={filterPeriod} onChange={(e) => setFilterPeriod(e.target.value as 'month' | 'year')}>
               <option value="month">Tháng</option>
               <option value="year">Năm</option>
             </select>
@@ -283,28 +316,6 @@ const AdminDashboard = () => {
             </ResponsiveContainer>
           </div>
 
-          {/* Booking Trend Chart */}
-          <div className="chart-card full-width">
-            <h3>Xu hướng booking theo ngày</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={bookingTrendData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="bookings" 
-                  stroke="#10b981" 
-                  strokeWidth={3}
-                  name="Số booking"
-                  dot={{ fill: '#10b981', r: 6 }}
-                  activeDot={{ r: 8 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
         </div>
 
         {/* Right Column - Activities & Notifications */}
@@ -316,17 +327,25 @@ const AdminDashboard = () => {
               <h3>Thông báo hệ thống</h3>
             </div>
             <div className="notifications-list">
-              {systemNotifications.map((notif) => (
-                <div key={notif.id} className={`notification-item ${notif.type}`}>
+              {systemNotifications.length > 0 ? (
+                systemNotifications.map((notif) => (
+                  <div key={notif.id} className={`notification-item ${notif.type}`}>
+                    <div className="notification-content">
+                      <p>{notif.message}</p>
+                      <span className="notification-time">
+                        <Clock size={14} />
+                        {notif.time}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="notification-item">
                   <div className="notification-content">
-                    <p>{notif.message}</p>
-                    <span className="notification-time">
-                      <Clock size={14} />
-                      {notif.time}
-                    </span>
+                    <p>Không có thông báo mới</p>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -337,24 +356,32 @@ const AdminDashboard = () => {
               <h3>Hoạt động gần đây</h3>
             </div>
             <div className="activities-list">
-              {recentActivities.map((activity) => {
-                const Icon = activity.icon;
-                return (
-                  <div key={activity.id} className="activity-item">
-                    <div className="activity-icon" style={{ background: `${activity.color}20` }}>
-                      <Icon size={20} color={activity.color} />
+              {recentActivities.length > 0 ? (
+                recentActivities.map((activity) => {
+                  const Icon = activity.icon;
+                  return (
+                    <div key={activity.id} className="activity-item">
+                      <div className="activity-icon" style={{ background: `${activity.color}20` }}>
+                        <Icon size={20} color={activity.color} />
+                      </div>
+                      <div className="activity-content">
+                        <p className="activity-title">{activity.title}</p>
+                        <p className="activity-description">{activity.description}</p>
+                        <span className="activity-time">
+                          <Clock size={14} />
+                          {activity.time}
+                        </span>
+                      </div>
                     </div>
-                    <div className="activity-content">
-                      <p className="activity-title">{activity.title}</p>
-                      <p className="activity-description">{activity.description}</p>
-                      <span className="activity-time">
-                        <Clock size={14} />
-                        {activity.time}
-                      </span>
-                    </div>
+                  );
+                })
+              ) : (
+                <div className="activity-item">
+                  <div className="activity-content">
+                    <p>Không có hoạt động gần đây</p>
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
           </div>
         </div>

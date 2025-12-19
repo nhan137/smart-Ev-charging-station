@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Bell, Send, Users, User, Clock, CheckCircle } from 'lucide-react';
-import apiEndpoints from '../../services/apiEndpoints';
-import { mockNotifications } from '../../services/mockData';
 import AlertModal from '../../components/shared/AlertModal';
+import { adminService } from '../../services/adminService';
 import './NotificationManagement.css';
 
 const NotificationManagement = () => {
@@ -30,16 +29,26 @@ const NotificationManagement = () => {
 
   const loadUsers = async () => {
     try {
-      const allUsers = await apiEndpoints.user.getAll({ role: 'user' });
-      setUsers(allUsers);
+      const response = await adminService.getUsers({ role_id: '1', limit: 100 });
+      if (response.success && response.data) {
+        const usersData = Array.isArray(response.data) ? response.data : (response.data.users || []);
+        setUsers(usersData);
+      }
     } catch (error) {
       console.error('Error loading users:', error);
     }
   };
 
-  const loadSentNotifications = () => {
-    // Load from mockData
-    setSentNotifications([...mockNotifications]);
+  const loadSentNotifications = async () => {
+    try {
+      const response = await adminService.getNotificationHistory({ page: 1, limit: 50 });
+      if (response.success && response.data) {
+        const notificationsData = Array.isArray(response.data) ? response.data : (response.data.notifications || []);
+        setSentNotifications(notificationsData);
+      }
+    } catch (error) {
+      console.error('Error loading notification history:', error);
+    }
   };
 
   const validate = () => {
@@ -73,7 +82,7 @@ const NotificationManagement = () => {
     try {
       const recipients = formData.target === 'all' ? 'all' : selectedUsers;
       
-      const result = await apiEndpoints.notification.send({
+      const result = await adminService.sendNotification({
         title: formData.title,
         message: formData.message,
         type: formData.type,
@@ -83,26 +92,12 @@ const NotificationManagement = () => {
       setAlertModal({
         show: true,
         title: 'Gửi thành công!',
-        message: `Đã gửi thông báo đến ${result.sent_count} người dùng`,
+        message: `Đã gửi thông báo đến ${result.data?.sent_count || 0} người dùng`,
         type: 'success'
       });
 
-      // Add to sent notifications list
-      const newNotification = {
-        notification_id: Date.now(),
-        title: formData.title,
-        message: formData.message,
-        type: formData.type,
-        recipients: formData.target,
-        recipientCount: result.sent_count,
-        sentAt: new Date().toISOString(),
-        sentBy: 'Admin System',
-        status: 'sent'
-      };
-      
-      // Add to mockNotifications array (mutate the original array)
-      mockNotifications.unshift(newNotification);
-      setSentNotifications([newNotification, ...sentNotifications]);
+      // Reload notification history
+      loadSentNotifications();
 
       // Reset form
       setFormData({

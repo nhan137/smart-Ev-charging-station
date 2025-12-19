@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Filter, Search, Calendar, User, Building2, Clock, DollarSign } from 'lucide-react';
-import { mockStations } from '../../services/mockData';
+import { Filter, Search, Calendar, User, Building2, Clock, DollarSign, Loader2 } from 'lucide-react';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
 import BookingDetailModal from '../User/components/BookingDetailModal';
+import { adminService } from '../../services/adminService';
 import './BookingManagement.css';
 
 interface Booking {
@@ -21,11 +21,14 @@ interface Booking {
 
 const BookingManagement = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingStats, setBookingStats] = useState({ total: 0, pending: 0, charging: 0, completed: 0 });
+  const [stations, setStations] = useState<any[]>([]);
   const [filterStation, setFilterStation] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   const [confirmModal, setConfirmModal] = useState({
     show: false,
     title: '',
@@ -46,128 +49,83 @@ const BookingManagement = () => {
 
   useEffect(() => {
     loadBookings();
-  }, []);
+    loadBookingStats();
+    loadStations();
+  }, [filterStation, filterStatus, filterStartDate, filterEndDate, searchQuery]);
 
-  const loadBookings = () => {
-    // Mock data with additional fields
-    const mockBookings: Booking[] = [
-      {
-        booking_id: 1,
-        user_id: 1,
-        user_name: 'Nguyễn Văn A',
-        station_id: 1,
-        station_name: 'Trạm sạc Hải Châu',
-        vehicle_type: 'oto_ccs',
-        start_time: '2025-01-20T14:00:00',
-        end_time: '2025-01-20T16:00:00',
-        status: 'pending',
-        total_cost: 105000,
-        payment_status: 'pending',
-        payment_method: 'QR',
-        created_at: '2025-01-19T10:00:00',
-        updated_at: '2025-01-19T10:00:00'
-      } as any,
-      {
-        booking_id: 2,
-        user_id: 2,
-        user_name: 'Trần Thị B',
-        station_id: 2,
-        station_name: 'Trạm sạc Sơn Trà Premium',
-        vehicle_type: 'xe_may_ccs',
-        start_time: '2025-01-21T09:00:00',
-        end_time: '2025-01-21T10:00:00',
-        status: 'confirmed',
-        total_cost: 32000,
-        payment_status: 'pending',
-        payment_method: 'Bank',
-        created_at: '2025-01-20T08:00:00',
-        updated_at: '2025-01-20T08:30:00'
-      } as any,
-      {
-        booking_id: 3,
-        user_id: 3,
-        user_name: 'Lê Văn C',
-        station_id: 1,
-        station_name: 'Trạm sạc Hải Châu',
-        vehicle_type: 'xe_may_usb',
-        start_time: '2025-01-19T16:00:00',
-        end_time: '2025-01-19T17:00:00',
-        status: 'completed',
-        total_cost: 15000,
-        payment_status: 'paid',
-        payment_method: 'QR',
-        start_battery: 20,
-        end_battery: 85,
-        energy_consumed: 30,
-        created_at: '2025-01-18T14:00:00',
-        updated_at: '2025-01-19T17:00:00'
-      } as any,
-      {
-        booking_id: 4,
-        user_id: 1,
-        user_name: 'Nguyễn Văn A',
-        station_id: 3,
-        station_name: 'Trạm sạc Ngũ Hành Sơn',
-        vehicle_type: 'oto_ccs',
-        start_time: '2025-01-22T10:00:00',
-        end_time: '2025-01-22T12:00:00',
-        status: 'charging',
-        total_cost: 90000,
-        payment_status: 'pending',
-        payment_method: 'QR',
-        promotion_code: 'SUMMER10',
-        created_at: '2025-01-21T09:00:00',
-        updated_at: '2025-01-22T10:00:00'
-      } as any,
-      {
-        booking_id: 5,
-        user_id: 2,
-        user_name: 'Trần Thị B',
-        station_id: 2,
-        station_name: 'Trạm sạc Sơn Trà Premium',
-        vehicle_type: 'xe_may_usb',
-        start_time: '2025-01-18T15:00:00',
-        end_time: '2025-01-18T16:00:00',
-        status: 'cancelled',
-        total_cost: 12000,
-        payment_status: 'failed',
-        payment_method: 'Bank',
-        created_at: '2025-01-17T14:00:00',
-        updated_at: '2025-01-18T14:30:00'
-      } as any
-    ];
-    setBookings(mockBookings);
+  const loadStations = async () => {
+    try {
+      const response = await adminService.getStations({ page: 1, limit: 100 });
+      if (response.success && response.data) {
+        const stationsData = Array.isArray(response.data) ? response.data : (response.data.stations || []);
+        setStations(stationsData);
+      }
+    } catch (error: any) {
+      console.error('Error loading stations:', error);
+    }
   };
 
-  const filteredBookings = bookings.filter(booking => {
-    if (filterStation && booking.station_id !== Number(filterStation)) return false;
-    if (filterStatus && booking.status !== filterStatus) return false;
-    
-    const bookingDate = new Date(booking.start_time);
-    
-    if (filterStartDate) {
-      const startDate = new Date(filterStartDate);
-      startDate.setHours(0, 0, 0, 0);
-      if (bookingDate < startDate) return false;
+  const loadBookingStats = async () => {
+    try {
+      const response = await adminService.getBookingStats();
+      if (response.success && response.data) {
+        setBookingStats({
+          total: response.data.total || 0,
+          pending: response.data.pending || 0,
+          charging: response.data.charging || 0,
+          completed: response.data.completed || 0
+        });
+      }
+    } catch (error: any) {
+      console.error('Error loading booking stats:', error);
     }
-    
-    if (filterEndDate) {
-      const endDate = new Date(filterEndDate);
-      endDate.setHours(23, 59, 59, 999);
-      if (bookingDate > endDate) return false;
-    }
+  };
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        booking.user_name.toLowerCase().includes(query) ||
-        booking.station_name.toLowerCase().includes(query) ||
-        booking.booking_id.toString().includes(query)
-      );
+  const loadBookings = async () => {
+    try {
+      setLoading(true);
+      const params: any = {
+        page: 1,
+        limit: 100
+      };
+      
+      if (filterStation) params.station_id = filterStation;
+      if (filterStatus) params.status = filterStatus;
+      if (searchQuery) params.search = searchQuery;
+      if (filterStartDate) params.startDate = filterStartDate;
+      if (filterEndDate) params.endDate = filterEndDate;
+
+      const response = await adminService.getBookings(params);
+      if (response.success && response.data) {
+        const bookingsData = Array.isArray(response.data) ? response.data : (response.data.bookings || []);
+        const formattedBookings = bookingsData.map((booking: any) => ({
+          booking_id: booking.booking_id,
+          user_id: booking.user_id,
+          user_name: booking.user?.full_name || booking.user_name || 'N/A',
+          station_id: booking.station_id,
+          station_name: booking.station?.station_name || booking.station_name || 'N/A',
+          vehicle_type: booking.vehicle_type,
+          start_time: booking.start_time,
+          end_time: booking.end_time,
+          status: booking.status,
+          total_cost: parseFloat(booking.total_cost || 0)
+        }));
+        setBookings(formattedBookings);
+      }
+    } catch (error: any) {
+      console.error('Error loading bookings:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải danh sách đặt lịch',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
-    
-    return true;
-  });
+  };
+
+  const filteredBookings = bookings; // Backend already filters
 
   const handleConfirmBooking = (booking: Booking) => {
     setConfirmModal({
@@ -177,9 +135,7 @@ const BookingManagement = () => {
       type: 'info',
       onConfirm: async () => {
         try {
-          // TODO: Call API
-          // await bookingService.confirmBooking(booking.booking_id);
-          
+          await adminService.confirmBooking(booking.booking_id);
           setAlertModal({
             show: true,
             title: 'Thành công!',
@@ -187,6 +143,7 @@ const BookingManagement = () => {
             type: 'success'
           });
           loadBookings();
+          loadBookingStats();
         } catch (error: any) {
           setAlertModal({
             show: true,
@@ -207,9 +164,7 @@ const BookingManagement = () => {
       type: 'warning',
       onConfirm: async () => {
         try {
-          // TODO: Call API
-          // await bookingService.cancelBooking(booking.booking_id);
-          
+          await adminService.cancelBooking(booking.booking_id);
           setAlertModal({
             show: true,
             title: 'Thành công!',
@@ -217,6 +172,7 @@ const BookingManagement = () => {
             type: 'success'
           });
           loadBookings();
+          loadBookingStats();
         } catch (error: any) {
           setAlertModal({
             show: true,
@@ -275,7 +231,7 @@ const BookingManagement = () => {
           <Filter size={20} />
           <select value={filterStation} onChange={(e) => setFilterStation(e.target.value)}>
             <option value="">Tất cả trạm</option>
-            {mockStations.map((station) => (
+            {stations.map((station) => (
               <option key={station.station_id} value={station.station_id}>
                 {station.station_name}
               </option>
@@ -317,48 +273,53 @@ const BookingManagement = () => {
       {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-value">{bookings.length}</div>
+          <div className="stat-value">{bookingStats.total}</div>
           <div className="stat-label">Tổng booking</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{bookings.filter(b => b.status === 'pending').length}</div>
+          <div className="stat-value">{bookingStats.pending}</div>
           <div className="stat-label">Chờ xác nhận</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{bookings.filter(b => b.status === 'charging').length}</div>
+          <div className="stat-value">{bookingStats.charging}</div>
           <div className="stat-label">Đang sạc</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{bookings.filter(b => b.status === 'completed').length}</div>
+          <div className="stat-value">{bookingStats.completed}</div>
           <div className="stat-label">Hoàn thành</div>
         </div>
       </div>
 
       {/* Table */}
       <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Mã đặt lịch</th>
-              <th>Người đặt</th>
-              <th>Loại xe</th>
-              <th>Tên trạm</th>
-              <th>Thời gian bắt đầu</th>
-              <th>Trạng thái</th>
-              <th>Tổng tiền</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredBookings.length === 0 ? (
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+            <Loader2 size={32} className="animate-spin" style={{ color: '#3b82f6' }} />
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
               <tr>
-                <td colSpan={8} className="empty-row">
-                  <Calendar size={48} />
-                  <p>Không có booking nào</p>
-                </td>
+                <th>Mã đặt lịch</th>
+                <th>Người đặt</th>
+                <th>Loại xe</th>
+                <th>Tên trạm</th>
+                <th>Thời gian bắt đầu</th>
+                <th>Trạng thái</th>
+                <th>Tổng tiền</th>
+                <th>Thao tác</th>
               </tr>
-            ) : (
-              filteredBookings.map((booking) => (
+            </thead>
+            <tbody>
+              {filteredBookings.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="empty-row">
+                    <Calendar size={48} />
+                    <p>Không có booking nào</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredBookings.map((booking) => (
                 <tr key={booking.booking_id}>
                   <td className="id-cell">#{booking.booking_id}</td>
                   <td>
@@ -422,6 +383,7 @@ const BookingManagement = () => {
             )}
           </tbody>
         </table>
+        )}
       </div>
 
       {/* Confirm Modal */}
