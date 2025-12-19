@@ -1,45 +1,76 @@
-import { mockBookings, mockStations } from './mockData';
-import { authService } from './authService';
-
-const USE_MOCK = true;
+import api from './api';
 
 export const bookingService = {
-  // Get user's bookings
-  getMyBookings: async () => {
-    if (USE_MOCK) {
-      await new Promise(resolve => setTimeout(resolve, 0));
-      const user = authService.getCurrentUser();
-      if (!user) return { data: [] };
-      
-      const userBookings = mockBookings
-        .filter(b => b.user_id === user.user_id)
-        .map(booking => {
-          const station = mockStations.find(s => s.station_id === booking.station_id);
-          return {
-            ...booking,
-            station_name: station?.station_name || 'Unknown Station',
-            station_address: station?.address || 'Unknown Address',
-            vehicle_type: 'oto_ccs',
-            total_cost: booking.total_price,
-            created_at: booking.start_time
-          };
-        });
-      
-      return { data: userBookings };
+  // Create new booking
+  createBooking: async (data: {
+    station_id: number;
+    vehicle_type: string;
+    start_time: string;
+    end_time: string;
+    promo_code?: string;
+  }) => {
+    try {
+      const response = await api.post('/bookings', data);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tạo đặt lịch');
     }
-    // Real API call would go here
   },
 
-  // Request cancel booking
-  requestCancel: async (bookingId: number) => {
-    if (USE_MOCK) {
-      await new Promise(resolve => setTimeout(resolve, 0));
-      const booking = mockBookings.find(b => b.booking_id === bookingId);
-      if (booking) {
-        booking.status = 'pending_cancel';
-      }
-      return { data: { message: 'Yêu cầu hủy đã được gửi' } };
+  // Get user's booking history (for "Lịch sử đặt lịch")
+  getMyBookingList: async (params?: {
+    startDate?: string;
+    endDate?: string;
+    stationId?: string;
+    status?: string;
+  }) => {
+    try {
+      const response = await api.get('/bookings/my-bookings', { params });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải lịch sử đặt lịch');
     }
-    // Real API call would go here
+  },
+
+  // Verify check-in code to start charging
+  verifyCheckinCode: async (bookingId: number, checkinCode: string) => {
+    try {
+      const response = await api.post(`/bookings/${bookingId}/verify-checkin`, {
+        checkin_code: checkinCode,
+      });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể xác thực mã check-in');
+    }
+  },
+
+  // Get user's bookings (for "Lịch sử sạc & thanh toán")
+  getMyBookings: async () => {
+    try {
+      const response = await api.get('/bookings/my');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải lịch sử đặt lịch');
+    }
+  },
+
+  // Get booking by ID
+  getBookingById: async (bookingId: number) => {
+    try {
+      const response = await api.get(`/bookings/${bookingId}`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải thông tin đặt lịch');
+    }
+  },
+
+  // Cancel booking by user
+  cancelBookingByUser: async (bookingId: number) => {
+    try {
+      const response = await api.put(`/bookings/${bookingId}/cancel-by-user`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể hủy đặt lịch');
+    }
   }
 };

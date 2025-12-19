@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, AlertCircle } from 'lucide-react';
-import { mockStations } from '../../services/mockData';
+import { ArrowLeft, Building2, AlertCircle, Loader2 } from 'lucide-react';
+import { managerService } from '../../services/managerService';
 import AlertModal from '../../components/shared/AlertModal';
 import './UpdateStationStatus.css';
 
@@ -11,6 +11,7 @@ const UpdateStationStatus = () => {
   const [station, setStation] = useState<any>(null);
   const [newStatus, setNewStatus] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [loadingStation, setLoadingStation] = useState(false);
   const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
     show: false,
     title: '',
@@ -22,10 +23,32 @@ const UpdateStationStatus = () => {
     loadStation();
   }, [station_id]);
 
-  const loadStation = () => {
-    const foundStation = mockStations.find(s => s.station_id === Number(station_id));
-    setStation(foundStation);
-    setNewStatus(foundStation?.status || 'active');
+  const loadStation = async () => {
+    if (!station_id) return;
+    
+    try {
+      setLoadingStation(true);
+      const response = await managerService.getStationDetail(Number(station_id));
+      
+      if (response.success && response.data) {
+        // Backend trả về data là object trạm
+        const stationData = response.data;
+        setStation(stationData);
+        setNewStatus(stationData.status || 'active');
+      } else {
+        throw new Error('Không tìm thấy trạm sạc');
+      }
+    } catch (error: any) {
+      console.error('Error loading station:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải thông tin trạm',
+        type: 'error'
+      });
+    } finally {
+      setLoadingStation(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,20 +66,27 @@ const UpdateStationStatus = () => {
 
     setLoading(true);
     try {
-      // TODO: Call API
-      // await stationService.updateStatus(station_id, newStatus);
+      if (!station_id) {
+        throw new Error('Không tìm thấy ID trạm');
+      }
+      
+      const response = await managerService.updateStationStatus(Number(station_id), newStatus);
+      
+      if (response.success) {
+        setAlertModal({
+          show: true,
+          title: 'Thành công!',
+          message: response.message || 'Đã cập nhật trạng thái trạm',
+          type: 'success'
+        });
 
-      setAlertModal({
-        show: true,
-        title: 'Thành công!',
-        message: 'Đã cập nhật trạng thái trạm',
-        type: 'success'
-      });
-
-      // Navigate back after 1.5s
-      setTimeout(() => {
-        navigate('/manager/stations');
-      }, 1500);
+        // Navigate back after 1.5s
+        setTimeout(() => {
+          navigate('/manager/stations');
+        }, 1500);
+      } else {
+        throw new Error(response.message || 'Cập nhật thất bại');
+      }
     } catch (error: any) {
       setAlertModal({
         show: true,
@@ -87,8 +117,17 @@ const UpdateStationStatus = () => {
     return classes[status] || '';
   };
 
+  if (loadingStation) {
+    return (
+      <div className="loading-state">
+        <Loader2 className="spinner" size={32} />
+        <p>Đang tải...</p>
+      </div>
+    );
+  }
+
   if (!station) {
-    return <div className="loading-state">Đang tải...</div>;
+    return <div className="loading-state">Không tìm thấy trạm sạc</div>;
   }
 
   return (

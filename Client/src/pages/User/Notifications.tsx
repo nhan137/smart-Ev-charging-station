@@ -1,55 +1,69 @@
 import { useState, useEffect } from 'react';
 import { Bell, Clock, CheckCircle, Trash2, RefreshCw } from 'lucide-react';
-import { mockNotifications } from '../../services/mockData';
+import { notificationService } from '../../services/notificationService';
 import { authService } from '../../services/authService';
 import './Notifications.css';
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [filter, setFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(false);
   const user = authService.getCurrentUser();
 
   useEffect(() => {
     loadNotifications();
     
-    // Reload notifications every 5 seconds to get new ones
+    // Reload notifications every 30 seconds to get new ones
     const interval = setInterval(() => {
       loadNotifications();
-    }, 5000);
+    }, 30000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [filter]);
 
-  const loadNotifications = () => {
-    // Load directly from mockNotifications
-    const userNotifications = mockNotifications.map(notif => {
-      // Kiểm tra xem notification này đã có trong state chưa để giữ trạng thái isRead
-      const existingNotif = notifications.find(n => n.notification_id === notif.notification_id);
+  const loadNotifications = async () => {
+    try {
+      setLoading(true);
+      const response = await notificationService.getNotificationHistory({
+        type: filter === 'all' ? undefined : filter,
+        status: 'all',
+        limit: 50
+      });
       
-      return {
-        ...notif,
-        isRead: existingNotif ? existingNotif.isRead : false,
-        receivedAt: notif.sentAt
-      };
-    });
-    
-    setNotifications(userNotifications);
+      if (response.success && response.data) {
+        setNotifications(response.data.notifications || []);
+      }
+    } catch (error: any) {
+      console.error('Error loading notifications:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleMarkAsRead = (notificationId: number) => {
-    setNotifications(prev =>
-      prev.map(notif =>
-        notif.notification_id === notificationId
-          ? { ...notif, isRead: true }
-          : notif
-      )
-    );
+  const handleMarkAsRead = async (notificationId: number) => {
+    try {
+      await notificationService.markAsRead(notificationId);
+      setNotifications(prev =>
+        prev.map(notif =>
+          notif.notification_id === notificationId
+            ? { ...notif, status: 'read' }
+            : notif
+        )
+      );
+    } catch (error: any) {
+      console.error('Error marking as read:', error);
+    }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notif => ({ ...notif, isRead: true }))
-    );
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications(prev =>
+        prev.map(notif => ({ ...notif, status: 'read' }))
+      );
+    } catch (error: any) {
+      console.error('Error marking all as read:', error);
+    }
   };
 
   const handleDelete = (notificationId: number) => {
@@ -60,11 +74,29 @@ const Notifications = () => {
 
   const filteredNotifications = notifications.filter(notif => {
     if (filter === 'all') return true;
-    if (filter === 'unread') return !notif.isRead;
+    if (filter === 'unread') return notif.status === 'unread';
     return notif.type === filter;
   });
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter(n => n.status === 'unread').length;
+
+  // Highlight 6-ký tự mã check-in (A-Z0-9) trong message và format hàng ngang
+  const renderMessage = (message: string) => {
+    if (!message) return null;
+    const match = message.match(/[A-Z0-9]{6}/);
+    if (!match) {
+      return <span className="notification-message-text">{message}</span>;
+    }
+    const code = match[0];
+    const parts = message.split(code);
+    return (
+      <span className="notification-message-text">
+        {parts[0]}
+        <span className="notification-code-highlight">{code}</span>
+        {parts[1] || ''}
+      </span>
+    );
+  };
 
   const getTypeLabel = (type: string) => {
     switch (type) {
@@ -191,7 +223,9 @@ const Notifications = () => {
                 </div>
 
                 <h3 className="notification-title">{notif.title}</h3>
-                <p className="notification-message">{notif.message}</p>
+                <p className="notification-message">
+                  {renderMessage(notif.message)}
+                </p>
 
                 {!notif.isRead && (
                   <button

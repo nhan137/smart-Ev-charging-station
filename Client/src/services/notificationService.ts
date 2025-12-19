@@ -1,101 +1,54 @@
-// Notification Service - Gửi thông báo cho user
+import api from './api';
 
-import  api  from './api';
+export const notificationService = {
+  // Get unread notifications (for modal after login)
+  getUnreadNotifications: async () => {
+    try {
+      const response = await api.get('/notifications/unread');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải thông báo');
+    }
+  },
 
-interface CreateNotificationRequest {
-  user_id: number;
-  title: string;
-  message: string;
-  type: 'system' | 'booking' | 'payment' | 'promotion';
-  booking_id?: number;
-  confirmation_code?: string;
-}
+  // Get notification history with filters
+  getNotificationHistory: async (filters?: {
+    type?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.type) params.append('type', filters.type);
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.page) params.append('page', filters.page.toString());
+      if (filters?.limit) params.append('limit', filters.limit.toString());
+      
+      const response = await api.get(`/notifications?${params.toString()}`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải lịch sử thông báo');
+    }
+  },
 
-interface Notification {
-  notification_id: number;
-  user_id: number;
-  title: string;
-  message: string;
-  type: string;
-  booking_id?: number;
-  confirmation_code?: string;
-  is_read: boolean;
-  created_at: string;
-}
+  // Mark notification as read
+  markAsRead: async (notificationId: number) => {
+    try {
+      const response = await api.put(`/notifications/${notificationId}/read`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể đánh dấu đã đọc');
+    }
+  },
 
-/**
- * Tạo thông báo mới
- * Backend sẽ lưu thông báo vào database
- */
-export const createNotification = async (data: CreateNotificationRequest): Promise<Notification> => {
-  try {
-    const response = await api.post('/api/notifications', data);
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Lỗi tạo thông báo');
+  // Mark all notifications as read
+  markAllAsRead: async () => {
+    try {
+      const response = await api.put('/notifications/mark-all-read');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể đánh dấu tất cả đã đọc');
+    }
   }
-};
-
-/**
- * Lấy danh sách thông báo của user
- */
-export const getMyNotifications = async () => {
-  try {
-    const response = await api.get('/api/notifications/my-notifications');
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Lỗi lấy thông báo');
-  }
-};
-
-/**
- * Đánh dấu thông báo đã đọc
- */
-export const markAsRead = async (notificationId: number) => {
-  try {
-    const response = await api.put(`/api/notifications/${notificationId}/read`);
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Lỗi cập nhật thông báo');
-  }
-};
-
-/**
- * Xóa thông báo
- */
-export const deleteNotification = async (notificationId: number) => {
-  try {
-    const response = await api.delete(`/api/notifications/${notificationId}`);
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Lỗi xóa thông báo');
-  }
-};
-
-/**
- * Gửi thông báo xác nhận booking với mã 6 số
- */
-export const sendBookingConfirmationNotification = async (
-  userId: number,
-  bookingId: number,
-  confirmationCode: string,
-  userName: string,
-  stationName: string
-): Promise<Notification> => {
-  return createNotification({
-    user_id: userId,
-    title: 'Booking được xác nhận',
-    message: `Booking #${bookingId} tại ${stationName} đã được xác nhận. Mã xác nhận: ${confirmationCode}`,
-    type: 'booking',
-    booking_id: bookingId,
-    confirmation_code: confirmationCode
-  });
-};
-
-export default {
-  createNotification,
-  getMyNotifications,
-  markAsRead,
-  deleteNotification,
-  sendBookingConfirmationNotification
 };

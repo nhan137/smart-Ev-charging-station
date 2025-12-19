@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, User, Car, Clock, DollarSign, Filter } from 'lucide-react';
-import { mockStations } from '../../services/mockData';
+import { ArrowLeft, Calendar, User, Car, Clock, DollarSign, Filter, Loader2 } from 'lucide-react';
+import { managerService } from '../../services/managerService';
+import { stationService } from '../../services/stationService';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
-import { generateConfirmationCode, saveConfirmationCode } from '../../services/emailService';
-import { sendBookingConfirmationNotification } from '../../services/notificationService';
 import './StationBookings.css';
 
 const StationBookings = () => {
@@ -16,6 +15,7 @@ const StationBookings = () => {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [loading, setLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: string; bookingId: number } | null>(null);
   const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
@@ -26,72 +26,54 @@ const StationBookings = () => {
   });
 
   useEffect(() => {
-    loadData();
-  }, [station_id]);
+    if (station_id) {
+      loadStation();
+      loadBookings();
+    }
+  }, [station_id, filterStatus, filterStartDate, filterEndDate]);
 
-  const loadData = () => {
-    // Load station
-    const foundStation = mockStations.find(s => s.station_id === Number(station_id));
-    setStation(foundStation);
-
-    // Mock bookings data
-    const mockBookings = [
-      {
-        booking_id: 1,
-        user_id: 1,
-        user_name: 'Nguyễn Văn A',
-        user_email: 'nguyenvana@email.com',
-        vehicle_type: 'oto_ccs',
-        start_time: '2025-01-20T14:00:00',
-        end_time: '2025-01-20T16:00:00',
-        status: 'pending',
-        total_cost: 105000
-      },
-      {
-        booking_id: 2,
-        user_id: 1,
-        user_name: 'Trần Thị B',
-        user_email: 'tranthib@email.com',
-        vehicle_type: 'xe_may_ccs',
-        start_time: '2025-01-21T09:00:00',
-        end_time: '2025-01-21T10:00:00',
-        status: 'confirmed',
-        total_cost: 32000
-      },
-      {
-        booking_id: 3,
-        user_id: 1,
-        user_name: 'Lê Văn C',
-        user_email: 'levanc@email.com',
-        vehicle_type: 'xe_may_usb',
-        start_time: '2025-01-19T16:00:00',
-        end_time: '2025-01-19T17:00:00',
-        status: 'completed',
-        total_cost: 15000
+  const loadStation = async () => {
+    try {
+      const response = await stationService.getStationById(Number(station_id));
+      if (response.success && response.data) {
+        setStation(response.data.station);
       }
-    ];
-    setBookings(mockBookings);
+    } catch (error: any) {
+      console.error('Error loading station:', error);
+    }
   };
 
-  const filteredBookings = bookings.filter(booking => {
-    if (filterStatus && booking.status !== filterStatus) return false;
+  const loadBookings = async () => {
+    if (!station_id) return;
     
-    const bookingDate = new Date(booking.start_time);
-    
-    if (filterStartDate) {
-      const startDate = new Date(filterStartDate);
-      startDate.setHours(0, 0, 0, 0);
-      if (bookingDate < startDate) return false;
+    try {
+      setLoading(true);
+      const response = await managerService.getStationBookings(Number(station_id), {
+        status: filterStatus || undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined
+      });
+      
+      if (response.success && response.data) {
+        setBookings(response.data);
+      } else {
+        setBookings([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading bookings:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải danh sách đặt lịch',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
-    
-    if (filterEndDate) {
-      const endDate = new Date(filterEndDate);
-      endDate.setHours(23, 59, 59, 999);
-      if (bookingDate > endDate) return false;
-    }
-    
-    return true;
-  });
+  };
+
+  // Filtering is handled by API, so no need to filter again
+  const filteredBookings = bookings;
 
   const getVehicleTypeLabel = (type: string) => {
     const typeMap: any = {
@@ -125,44 +107,34 @@ const StationBookings = () => {
     try {
       const booking = bookings.find(b => b.booking_id === confirmAction.bookingId);
       
-      if (confirmAction.type === 'confirm' && booking) {
-        // Tạo mã xác nhận 6 số
-        const confirmationCode = generateConfirmationCode();
+      if (confirmAction.type === 'confirm') {
+        // Call API to confirm booking
+        const response = await managerService.confirmBooking(confirmAction.bookingId);
         
-        // Lưu mã xác nhận
-        saveConfirmationCode(booking.booking_id, confirmationCode);
+        if (response.success) {
+          setAlertModal({
+            show: true,
+            title: 'Xác nhận thành công!',
+            message: response.message || `Đã xác nhận booking #${confirmAction.bookingId}. Mã xác nhận đã được gửi cho khách hàng.`,
+            type: 'success'
+          });
+        }
+      } else if (confirmAction.type === 'cancel') {
+        // Call API to cancel booking
+        const response = await managerService.cancelBooking(confirmAction.bookingId);
         
-        // Gửi thông báo cho user với mã xác nhận
-        await sendBookingConfirmationNotification(
-          booking.user_id || 1,
-          booking.booking_id,
-          confirmationCode,
-          booking.user_name,
-          station?.station_name || ''
-        );
-
-        setAlertModal({
-          show: true,
-          title: 'Xác nhận thành công!',
-          message: `Đã xác nhận booking #${confirmAction.bookingId}. Mã xác nhận ${confirmationCode} đã được gửi qua thông báo cho ${booking.user_name}`,
-          type: 'success'
-        });
-      } else {
-        const actionLabels: any = {
-          cancel: 'hủy',
-          complete: 'hoàn tất'
-        };
-
-        setAlertModal({
-          show: true,
-          title: 'Thành công!',
-          message: `Đã ${actionLabels[confirmAction.type]} booking #${confirmAction.bookingId}`,
-          type: 'success'
-        });
+        if (response.success) {
+          setAlertModal({
+            show: true,
+            title: 'Hủy thành công!',
+            message: response.message || `Đã hủy booking #${confirmAction.bookingId}`,
+            type: 'success'
+          });
+        }
       }
 
       // Reload bookings
-      loadData();
+      await loadBookings();
     } catch (error: any) {
       setAlertModal({
         show: true,
@@ -172,6 +144,7 @@ const StationBookings = () => {
       });
     } finally {
       setConfirmAction(null);
+      setShowConfirmModal(false);
     }
   };
 
@@ -326,28 +299,18 @@ const StationBookings = () => {
                           </button>
                         </>
                       )}
+
                       {booking.status === 'confirmed' && (
-                        <button
-                          className="action-btn-text"
-                          onClick={() => handleAction('cancel', booking.booking_id)}
-                        >
-                          Hủy
-                        </button>
+                        <span className="action-status-text action-status-approved">
+                          Đã phê duyệt
+                        </span>
                       )}
-                      {booking.status === 'charging' && (
-                        <button
-                          className="action-btn-text"
-                          onClick={() => handleAction('complete', booking.booking_id)}
-                        >
-                          Hoàn tất
-                        </button>
+
+                      {booking.status === 'cancelled' && (
+                        <span className="action-status-text action-status-cancelled">
+                          Đã hủy
+                        </span>
                       )}
-                      <button
-                        className="action-btn-text"
-                        onClick={() => {/* TODO: Show detail modal */}}
-                      >
-                        Xem chi tiết
-                      </button>
                     </div>
                   </td>
                 </tr>

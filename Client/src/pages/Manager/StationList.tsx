@@ -1,33 +1,41 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, MapPin, Filter } from 'lucide-react';
-import { authService } from '../../services/authService';
-import { mockStations } from '../../services/mockData';
+import { Building2, MapPin, Filter, Loader2 } from 'lucide-react';
+import { managerService } from '../../services/managerService';
 import './StationList.css';
 
 const StationList = () => {
   const navigate = useNavigate();
-  const user = authService.getCurrentUser();
   const [stations, setStations] = useState<any[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadStations();
-  }, []);
+  }, [filterStatus]);
 
-  const loadStations = () => {
-    // Filter stations managed by this manager
-    const managedStationIds = user?.managed_stations || [];
-    const managedStations = mockStations.filter(s => 
-      managedStationIds.includes(s.station_id)
-    );
-    setStations(managedStations);
+  const loadStations = async () => {
+    try {
+      setLoading(true);
+      const response = await managerService.getManagerStations({
+        status: filterStatus || undefined
+      });
+      
+      if (response.success && response.data) {
+        setStations(response.data);
+      } else {
+        setStations([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading stations:', error);
+      setStations([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredStations = stations.filter(station => {
-    if (!filterStatus) return true;
-    return station.status === filterStatus;
-  });
+  // Filter is handled by API, so no need to filter again
+  const filteredStations = stations;
 
   const getStatusBadge = (status: string) => {
     const statusConfig: any = {
@@ -80,27 +88,34 @@ const StationList = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredStations.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="empty-row">
+                  <Loader2 className="spinner" size={32} />
+                  <p>Đang tải...</p>
+                </td>
+              </tr>
+            ) : filteredStations.length === 0 ? (
               <tr>
                 <td colSpan={7} className="empty-row">
                   <Building2 size={48} />
-                  <p>Không có trạm nào </p>
+                  <p>Không có trạm nào</p>
                 </td>
               </tr>
             ) : (
               filteredStations.map((station) => (
                 <tr key={station.station_id}>
-                  <td>#{station.station_id}</td>
+                  <td>{station.station_code || `#${station.station_id}`}</td>
                   <td>
                     <Building2 size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'middle' }} />
                     {station.station_name}
                   </td>
                   <td>
                     <MapPin size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-                    {station.address.substring(0, 40)}...
+                    {station.address?.substring(0, 40)}...
                   </td>
-                  <td>{station.price_per_kwh?.toLocaleString()} đ/kWh</td>
-                  <td>{station.available_slots}/{station.total_slots}</td>
+                  <td>{station.price_display || `${station.price_per_kwh?.toLocaleString()} đ/kWh`}</td>
+                  <td>{station.slots_display || `${station.available_slots}/${station.total_slots}`}</td>
                   <td>{getStatusBadge(station.status || 'active')}</td>
                   <td>
                     <div className="action-buttons">

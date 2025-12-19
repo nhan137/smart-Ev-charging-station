@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, MapPin, DollarSign, Zap, Phone, Clock, Settings, Calendar } from 'lucide-react';
-import { mockStations, mockFeedbacks, mockUsers } from '../../services/mockData';
+import { ArrowLeft, Building2, MapPin, DollarSign, Zap, Phone, Clock, Settings, Calendar, Loader2 } from 'lucide-react';
+import { managerService } from '../../services/managerService';
 import SlotsModal from './components/SlotsModal';
 import './StationDetail.css';
 
@@ -10,23 +10,33 @@ const StationDetail = () => {
   const navigate = useNavigate();
   const [station, setStation] = useState<any>(null);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [showSlotsModal, setShowSlotsModal] = useState(false);
 
   useEffect(() => {
     loadData();
   }, [station_id]);
 
-  const loadData = () => {
-    const foundStation = mockStations.find(s => s.station_id === Number(station_id));
-    setStation(foundStation);
-
-    //  feedbacks
-    const stationFeedbacks = mockFeedbacks.filter(f => f.station_id === Number(station_id));
-    const feedbacksWithUsers = stationFeedbacks.map(f => ({
-      ...f,
-      user: mockUsers.find(u => u.user_id === f.user_id)
-    }));
-    setFeedbacks(feedbacksWithUsers);
+  const loadData = async () => {
+    if (!station_id) return;
+    
+    try {
+      setLoading(true);
+      const response = await managerService.getStationDetail(Number(station_id));
+      
+      if (response.success && response.data) {
+        // Backend trả về data là object trạm đã format sẵn
+        setStation(response.data);
+        setFeedbacks(response.data.recent_reviews || []);
+      } else {
+        throw new Error('Không tìm thấy trạm sạc');
+      }
+    } catch (error: any) {
+      console.error('Error loading station detail:', error);
+      // Giữ UI nhưng log lỗi
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStationTypeLabel = (type: string) => {
@@ -48,12 +58,23 @@ const StationDetail = () => {
     return <span className={`status-badge ${config.class}`}>{config.label}</span>;
   };
 
-  const avgRating = feedbacks.length > 0
+  const avgRating = station?.rating_stats?.avg_rating 
+    ? station.rating_stats.avg_rating.toFixed(1)
+    : feedbacks.length > 0
     ? (feedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbacks.length).toFixed(1)
     : '0.0';
 
+  if (loading) {
+    return (
+      <div className="loading-state">
+        <Loader2 className="spinner" size={32} />
+        <p>Đang tải...</p>
+      </div>
+    );
+  }
+
   if (!station) {
-    return <div className="loading-state">Đang tải...</div>;
+    return <div className="loading-state">Không tìm thấy trạm sạc</div>;
   }
 
   return (

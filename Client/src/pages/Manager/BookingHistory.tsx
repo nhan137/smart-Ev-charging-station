@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Calendar, User, Car, Clock, DollarSign, Filter, MapPin, Search } from 'lucide-react';
+import { Calendar, User, Car, Clock, DollarSign, Filter, MapPin, Search, Loader2 } from 'lucide-react';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
-import { generateConfirmationCode, saveConfirmationCode } from '../../services/emailService';
-import { sendBookingConfirmationNotification } from '../../services/notificationService';
+import { managerService } from '../../services/managerService';
 import './BookingHistory.css';
 
 const BookingHistory = () => {
@@ -12,6 +11,7 @@ const BookingHistory = () => {
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [loading, setLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: string; bookingId: number } | null>(null);
   const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
@@ -23,79 +23,31 @@ const BookingHistory = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [filterStatus, filterStartDate, filterEndDate, searchTerm]);
 
-  const loadData = () => {
-    // Mock bookings data - tất cả booking từ các trạm manager quản lý
-    const mockBookings = [
-      {
-        booking_id: 1,
-        user_name: 'Nguyễn Văn A',
-        user_email: 'nguyenvana@email.com',
-        station_name: 'Trạm sạc Quận 1',
-        vehicle_type: 'oto_ccs',
-        start_time: '2025-01-20T14:00:00',
-        end_time: '2025-01-20T16:00:00',
-        status: 'completed',
-        total_cost: 105000
-      },
-      {
-        booking_id: 2,
-        user_name: 'Trần Thị B',
-        user_email: 'tranthib@email.com',
-        station_name: 'Trạm sạc Quận 3',
-        vehicle_type: 'xe_may_ccs',
-        start_time: '2025-01-21T09:00:00',
-        end_time: '2025-01-21T10:00:00',
-        status: 'confirmed',
-        total_cost: 32000
-      },
-      {
-        booking_id: 3,
-        user_name: 'Lê Văn C',
-        user_email: 'levanc@email.com',
-        station_name: 'Trạm sạc Quận 7',
-        vehicle_type: 'xe_may_usb',
-        start_time: '2025-01-19T16:00:00',
-        end_time: '2025-01-19T17:00:00',
-        status: 'completed',
-        total_cost: 15000
-      },
-      {
-        booking_id: 4,
-        user_name: 'Phạm Thị D',
-        user_email: 'phamthid@email.com',
-        station_name: 'Trạm sạc Quận 1',
-        vehicle_type: 'oto_ccs',
-        start_time: '2025-01-22T10:00:00',
-        end_time: '2025-01-22T12:00:00',
-        status: 'pending',
-        total_cost: 120000
-      },
-      {
-        booking_id: 5,
-        user_name: 'Hoàng Văn E',
-        user_email: 'hoangvane@email.com',
-        station_name: 'Trạm sạc Quận 3',
-        vehicle_type: 'xe_may_ccs',
-        start_time: '2025-01-18T08:00:00',
-        end_time: '2025-01-18T09:30:00',
-        status: 'cancelled',
-        total_cost: 45000
-      },
-      {
-        booking_id: 6,
-        user_name: 'Nguyễn Thị F',
-        user_email: 'nguyenthif@email.com',
-        station_name: 'Trạm sạc Quận 7',
-        vehicle_type: 'oto_ccs',
-        start_time: '2025-01-23T14:00:00',
-        end_time: '2025-01-23T16:00:00',
-        status: 'charging',
-        total_cost: 98000
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const response = await managerService.getBookingHistory({
+        status: filterStatus || undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined,
+        search: searchTerm || undefined
+      });
+      
+      if (response.success && response.data) {
+        setBookings(Array.isArray(response.data) ? response.data : []);
+      } else {
+        setBookings([]);
       }
-    ];
-    setBookings(mockBookings);
+    } catch (error: any) {
+      console.error('Error loading booking history:', error);
+      // Set empty array instead of showing error modal immediately
+      // Error will be shown if user tries to interact
+      setBookings([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredBookings = bookings.filter(booking => {
@@ -327,28 +279,37 @@ const BookingHistory = () => {
 
       {/* Table */}
       <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Mã booking</th>
-              <th>Khách hàng</th>
-              <th>Trạm sạc</th>
-              <th>Loại xe</th>
-              <th>Thời gian</th>
-              <th>Trạng thái</th>
-              <th>Tổng tiền</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredBookings.length === 0 ? (
+        {loading ? (
+          <div className="loading-state">
+            <Loader2 className="spinner" size={32} />
+            <p>Đang tải dữ liệu...</p>
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
               <tr>
-                <td colSpan={8} className="empty-row">
-                  <Calendar size={48} />
-                  <p>Không có booking nào</p>
-                </td>
+                <th>Mã booking</th>
+                <th>Khách hàng</th>
+                <th>Trạm sạc</th>
+                <th>Loại xe</th>
+                <th>Thời gian</th>
+                <th>Trạng thái</th>
+                <th>Tổng tiền</th>
+                <th>Thao tác</th>
               </tr>
-            ) : (
+            </thead>
+            <tbody>
+              {filteredBookings.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="empty-row">
+                    <Calendar size={48} />
+                    <p>Không có booking nào</p>
+                    <p style={{ fontSize: '0.9rem', color: '#64748b', marginTop: '0.5rem' }}>
+                      Chưa có người dùng nào đặt lịch tại các trạm bạn quản lý
+                    </p>
+                  </td>
+                </tr>
+              ) : (
               filteredBookings.map((booking) => (
                 <tr key={booking.booking_id}>
                   <td className="id-cell">#{booking.booking_id}</td>
@@ -431,6 +392,7 @@ const BookingHistory = () => {
             )}
           </tbody>
         </table>
+        )}
       </div>
 
       {/* Confirm Modal */}

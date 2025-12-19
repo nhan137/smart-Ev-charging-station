@@ -1,7 +1,16 @@
 .user-notifications {
-  max-width: 1000px;
+  width: 100% !important;
+  max-width: 100% !important;
   margin: 0 auto;
   padding: 2rem;
+  box-sizing: border-box;
+}
+
+/* Force full width on all child containers */
+.user-notifications > * {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
 }
 
 /* Header */
@@ -130,9 +139,12 @@
 
 /* Notifications List */
 .notifications-list {
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
+  flex-direction: column !important;
   gap: 1rem;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
 }
 
 .empty-notifications {
@@ -164,7 +176,8 @@
 
 /* Notification Card */
 .notification-card {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
   gap: 1rem;
   padding: 1.5rem;
   background: white;
@@ -173,6 +186,12 @@
   transition: all 0.2s ease;
   cursor: pointer;
   position: relative;
+  align-items: flex-start;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .notification-card:hover {
@@ -213,25 +232,36 @@
 .notification-icon {
   width: 56px;
   height: 56px;
+  min-width: 56px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  flex-grow: 0;
 }
 
 .notification-content {
-  flex: 1;
+  flex: 1 1 auto !important;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  overflow: visible;
+  flex-grow: 1;
 }
 
 .notification-header-row {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
 }
 
 .notification-type {
@@ -260,6 +290,13 @@
   color: #1e293b;
   margin: 0;
   line-height: 1.4;
+  width: 100%;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
+  white-space: normal;
+  display: block;
 }
 
 .notification-message {
@@ -267,6 +304,34 @@
   color: #64748b;
   line-height: 1.6;
   margin: 0;
+  white-space: normal !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  word-break: normal !important;
+  overflow: visible;
+  text-align: left;
+}
+
+.notification-message-text {
+  display: inline !important;
+  white-space: normal !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: normal !important;
+  line-height: 1.6;
+  width: auto;
+  text-align: left;
+}
+
+.notification-code-highlight {
+  font-weight: 800;
+  color: #1d4ed8;
+  letter-spacing: 0.15em;
+  margin: 0 0.25rem;
+  display: inline-block;
 }
 
 .btn-mark-read {
@@ -297,6 +362,8 @@
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
+  flex-grow: 0;
+  min-width: 40px;
   align-self: flex-start;
 }
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, Zap, DollarSign, Tag } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Zap, Tag } from 'lucide-react';
 import { stationService } from '../../../services/stationService';
+import { bookingService } from '../../../services/bookingService';
 import AlertModal from '../../../components/shared/AlertModal';
 import './CreateBooking.css';
 
@@ -17,7 +18,6 @@ const CreateBooking = () => {
   const [endDate, setEndDate] = useState('');
   const [endTime, setEndTime] = useState('');
   const [promoCode, setPromoCode] = useState('');
-  const [promoDiscount, setPromoDiscount] = useState(0);
   const [promoError, setPromoError] = useState('');
   const [loading, setLoading] = useState(false);
   const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
@@ -27,27 +27,8 @@ const CreateBooking = () => {
     type: 'success'
   });
 
-  // Mock promotions data
-  const mockPromotions = [
-    {
-      code: 'GIAM20',
-      discount_percent: 20,
-      max_discount: 50000,
-      min_amount: 50000,
-      valid_from: '2024-01-01',
-      valid_to: '2025-12-31',
-      status: 'active'
-    },
-    {
-      code: 'NEWUSER',
-      discount_percent: 30,
-      max_discount: 100000,
-      min_amount: 100000,
-      valid_from: '2024-01-01',
-      valid_to: '2025-12-31',
-      status: 'active'
-    }
-  ];
+  // (Optional) Mock promotions data - hiện tại chỉ dùng để validate sơ bộ nếu cần
+  // Có thể bỏ hoàn toàn nếu xử lý mã giảm giá ở bước thanh toán
 
   useEffect(() => {
     loadStation();
@@ -58,19 +39,32 @@ const CreateBooking = () => {
       if (stationId) {
         // Load station from API
         const response = await stationService.getStationById(Number(stationId));
-        setStation(response.data);
+        if (response.success && response.data) {
+          // API returns { station, rating_stats, recent_feedbacks }
+          setStation(response.data.station);
+        } else {
+          throw new Error('Không tìm thấy trạm sạc');
+        }
       } else {
         // Load first station as default
         const response = await stationService.getAllStations();
-        if (response.data && response.data.length > 0) {
+        if (response.success && response.data && response.data.length > 0) {
           setStation(response.data[0]);
+        } else {
+          throw new Error('Không có trạm sạc nào');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading station:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải thông tin trạm sạc',
+        type: 'error'
+      });
       // Fallback to mock data if API fails
       setStation({
-        station_id: 1,
+        station_id: Number(stationId) || 1,
         station_name: 'Trạm sạc Hải Châu',
         price_per_kwh: 3500,
         connector_types: 'Type 2, CCS2, CHAdeMO'
@@ -116,48 +110,6 @@ const CreateBooking = () => {
   // Calculate estimated cost
   const batteryCapacity = getBatteryCapacity(vehicleType);
   const baseCost = batteryCapacity * (station?.price_per_kwh || 0);
-  const finalCost = baseCost - promoDiscount;
-
-  // Validate and apply promo code
-  const applyPromoCode = () => {
-    setPromoError('');
-    setPromoDiscount(0);
-
-    if (!promoCode.trim()) return;
-
-    const promo = mockPromotions.find(p => p.code.toUpperCase() === promoCode.toUpperCase());
-    
-    if (!promo) {
-      setPromoError('Mã giảm giá không tồn tại');
-      return;
-    }
-
-    if (promo.status !== 'active') {
-      setPromoError('Mã giảm giá không còn hiệu lực');
-      return;
-    }
-
-    const now = new Date();
-    const validFrom = new Date(promo.valid_from);
-    const validTo = new Date(promo.valid_to);
-
-    if (now < validFrom || now > validTo) {
-      setPromoError('Mã giảm giá đã hết hạn');
-      return;
-    }
-
-    if (baseCost < promo.min_amount) {
-      setPromoError(`Đơn hàng tối thiểu ${promo.min_amount.toLocaleString()}đ`);
-      return;
-    }
-
-    const discount = Math.min(
-      (baseCost * promo.discount_percent) / 100,
-      promo.max_discount
-    );
-
-    setPromoDiscount(discount);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,27 +137,38 @@ const CreateBooking = () => {
     setLoading(true);
 
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Combine date and time
+      const startDateTime = `${startDate}T${startTime}:00`;
+      const endDateTime = `${endDate}T${endTime}:00`;
       
-      // Mock booking_id
-      const mockBookingId = Math.floor(Math.random() * 1000) + 1;
-      
-      setAlertModal({
-        show: true,
-        title: 'Thành công!',
-        message: 'Đặt lịch thành công!',
-        type: 'success'
+      // Call API to create booking
+      const response = await bookingService.createBooking({
+        station_id: station.station_id,
+        vehicle_type: vehicleType,
+        start_time: startDateTime,
+        end_time: endDateTime
       });
       
-      setTimeout(() => {
-        navigate(`/bookings/${mockBookingId}/charging`);
-      }, 1500);
-    } catch (error) {
+      if (response.success && response.data) {
+        setAlertModal({
+          show: true,
+          title: 'Thành công!',
+          message: response.message || 'Đặt lịch thành công! Vui lòng chờ quản lý phê duyệt.',
+          type: 'success'
+        });
+        
+        setTimeout(() => {
+          navigate('/bookings/list');
+        }, 1500);
+      } else {
+        throw new Error(response.message || 'Đặt lịch thất bại');
+      }
+    } catch (error: any) {
+      console.error('Error creating booking:', error);
       setAlertModal({
         show: true,
         title: 'Lỗi',
-        message: 'Có lỗi xảy ra, vui lòng thử lại',
+        message: error.message || 'Có lỗi xảy ra, vui lòng thử lại',
         type: 'error'
       });
     } finally {
@@ -372,40 +335,12 @@ const CreateBooking = () => {
                       onChange={(e) => {
                         setPromoCode(e.target.value.toUpperCase());
                         setPromoError('');
-                        setPromoDiscount(0);
                       }}
-                      placeholder="Nhập mã giảm giá"
+                      placeholder="Nhập mã giảm giá (áp dụng khi thanh toán sau khi sạc)"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={applyPromoCode}
-                    className="apply-promo-btn"
-                    disabled={!promoCode.trim()}
-                  >
-                    Áp dụng
-                  </button>
                 </div>
                 {promoError && <span className="error-message">{promoError}</span>}
-                {promoDiscount > 0 && (
-                  <span className="success-message">✓ Giảm {promoDiscount.toLocaleString()}đ</span>
-                )}
-              </div>
-
-              {promoDiscount > 0 && (
-                <div className="cost-summary discount-summary">
-                  <div className="cost-row">
-                    <span>Tiền giảm:</span>
-                    <span className="discount-value">-{promoDiscount.toLocaleString()}đ</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="cost-summary final-summary">
-                <div className="cost-row final-row">
-                  <span>Tổng tiền:</span>
-                  <span className="final-value">{finalCost.toLocaleString()}đ</span>
-                </div>
               </div>
             </div>
           )}

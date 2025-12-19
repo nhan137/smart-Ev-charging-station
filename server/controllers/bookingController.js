@@ -59,6 +59,23 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
+    // 0. Check if user already has pending or confirmed booking (prevent spam)
+    const existingActiveBooking = await Booking.findOne({
+      where: {
+        user_id: user_id,
+        status: { [Op.in]: ['pending', 'confirmed', 'charging'] }
+      },
+      transaction
+    });
+
+    if (existingActiveBooking) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Bạn đã có lịch đặt đang chờ xử lý hoặc đã được xác nhận. Vui lòng hủy lịch hiện tại hoặc đợi lịch đó hoàn thành trước khi đặt lịch mới.'
+      });
+    }
+
     // 1. Check station exists & has available slots (include manager_id)
     const station = await Station.findOne({
       where: {
@@ -552,7 +569,7 @@ exports.getBookingById = async (req, res, next) => {
 exports.getMyBookingList = async (req, res, next) => {
   try {
     const userId = req.user.user_id;
-    const { status } = req.query;
+    const { status, startDate, endDate, stationId } = req.query;
 
     // Build WHERE conditions
     const whereConditions = {
@@ -560,21 +577,48 @@ exports.getMyBookingList = async (req, res, next) => {
     };
 
     // Apply status filter (nếu có)
-    if (status) {
+    if (status && status !== 'all' && status !== '') {
       whereConditions.status = status;
     }
 
-    // Query bookings with station info only
+    // Apply date range filter
+    if (startDate || endDate) {
+      whereConditions.start_time = {};
+      if (startDate) {
+        // Start of day for startDate
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        whereConditions.start_time[Op.gte] = start;
+      }
+      if (endDate) {
+        // End of day for endDate
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        whereConditions.start_time[Op.lte] = end;
+      }
+    }
+
+    // Build include conditions for station filter
+    const includeConditions = [
+      {
+        model: Station,
+        as: 'station',
+        attributes: ['station_id', 'station_name', 'address'],
+        required: true
+      }
+    ];
+
+    // Apply station filter
+    if (stationId) {
+      includeConditions[0].where = {
+        station_id: parseInt(stationId)
+      };
+    }
+
+    // Query bookings with station info
     const bookings = await Booking.findAll({
       where: whereConditions,
-      include: [
-        {
-          model: Station,
-          as: 'station',
-          attributes: ['station_name', 'address'],
-          required: true
-        }
-      ],
+      include: includeConditions,
       order: [['created_at', 'DESC']]
     });
 
@@ -621,18 +665,18 @@ exports.getMyBookingList = async (req, res, next) => {
       return {
         booking_id: booking.booking_id,
         station_name: station?.station_name || null,
+        station_address: station?.address || null,
         vehicle_type: booking.vehicle_type,
         vehicle_type_display: vehicleTypeDisplay,
         booking_date: formatDate(booking.created_at),
-        start_time: formatTime(booking.start_time),
-        end_time: formatTime(booking.end_time),
-        start_time_full: booking.start_time,
-        end_time_full: booking.end_time,
-        total_cost: booking.total_cost ? parseFloat(booking.total_cost) : null,
+        start_time: booking.start_time, // Return raw datetime for frontend parsing
+        end_time: booking.end_time, // Return raw datetime for frontend parsing
+        created_at: booking.created_at,
+        status: booking.status,
         booking_status: booking.status,
         booking_status_display: bookingStatusDisplay,
         checkin_code: booking.checkin_code || null, // Có checkin_code để nhập vào modal
-        created_at: booking.created_at
+        // Removed total_cost - not needed in booking history list
       };
     });
 
