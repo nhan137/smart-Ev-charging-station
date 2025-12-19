@@ -9,24 +9,6 @@ const { Op } = require('sequelize');
  * Get user statistics
  * GET /api/admin/users/stats
  */
-exports.getUserStats = async (req, res, next) => {
-  try {
-    const total = await User.count();
-    const active = await User.count({ where: { status: 'active' } });
-    const locked = await User.count({ where: { status: 'locked' } });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        total,
-        active,
-        locked
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 /**
  * Get all users with filters
