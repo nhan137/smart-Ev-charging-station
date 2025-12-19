@@ -72,5 +72,25 @@ export const bookingService = {
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Không thể hủy đặt lịch');
     }
+  },
+
+  // Get charging status
+  getChargingStatus: async (bookingId: number) => {
+    try {
+      const response = await api.get(`/bookings/${bookingId}/charging/status`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải trạng thái sạc');
+    }
+  },
+
+  // Complete charging manually
+  completeCharging: async (bookingId: number) => {
+    try {
+      const response = await api.post(`/bookings/${bookingId}/charging/complete`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể hoàn tất sạc');
+    }
   }
 };

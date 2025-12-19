@@ -125,6 +125,7 @@ app.use('/api/reports', reportRoutes);
 // Internal API Routes (for IoT simulator)
 const chargingController = require('./controllers/chargingController');
 app.post('/internal/charging-update/:booking_id', chargingController.receiveChargingUpdate);
+app.post('/internal/charging-stop/:booking_id', chargingController.handleChargingStop);
 
 // 404 handler
 app.use((req, res) => {
@@ -165,6 +166,50 @@ io.on('connection', (socket) => {
     console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
   });
 });
+
+// Monitor for stopped IoT Simulators (check every 3 seconds)
+// If no update received for 5 seconds, auto-complete the charging
+const chargingMonitor = require('./utils/chargingMonitor');
+setInterval(async () => {
+  try {
+    const stoppedBookings = chargingMonitor.getStoppedBookings();
+    
+    if (stoppedBookings.length > 0) {
+      const chargingController = require('./controllers/chargingController');
+      const Booking = require('./models/Booking');
+      
+      for (const stopped of stoppedBookings) {
+        // Check if booking is still in charging status
+        const booking = await Booking.findByPk(stopped.booking_id);
+        if (booking && booking.status === 'charging') {
+          console.log(`[ChargingMonitor] Auto-stopping booking ${stopped.booking_id} (no update for ${Math.round(stopped.time_since_update / 1000)}s)`);
+          
+          // Create request-like object
+          const mockReq = {
+            params: { booking_id: stopped.booking_id.toString() },
+            body: { 
+              reason: 'timeout_no_updates',
+              final_battery_percent: null,
+              final_energy_consumed: null
+            },
+            app: { get: (key) => key === 'io' ? io : null }
+          };
+          
+          const mockRes = {
+            status: () => ({ json: () => {} })
+          };
+          
+          const mockNext = () => {};
+          
+          // Auto-stop the charging
+          await chargingController.handleChargingStop(mockReq, mockRes, mockNext);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[ChargingMonitor] Error:', error.message);
+  }
+}, 10000); // Check every 10 seconds
 
 // Start server
 const PORT = process.env.PORT || 3000;

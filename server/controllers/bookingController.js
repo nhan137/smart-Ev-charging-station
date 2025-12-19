@@ -43,11 +43,13 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
-    if (startDate >= endDate) {
+    // Check if end time is after start time (with at least 1 minute difference)
+    const timeDiff = endDate.getTime() - startDate.getTime();
+    if (timeDiff <= 0 || timeDiff < 60000) { // At least 1 minute (60000ms)
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'End time must be after start time'
+        message: 'End time must be after start time (minimum 1 minute)'
       });
     }
 
@@ -741,17 +743,49 @@ exports.verifyCheckinCode = async (req, res, next) => {
       });
     }
 
-    // Code is valid - allow charging to start
-    res.status(200).json({
-      success: true,
-      message: 'Mã check-in hợp lệ',
-      data: {
-        booking_id: booking.booking_id,
-        status: booking.status,
-        can_start_charging: true,
-        station_id: booking.station_id
+    // Code is valid - Start charging by updating booking status
+    const ChargingSession = require('../models/ChargingSession');
+    const { sequelize } = require('../config/database');
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Update booking status to 'charging'
+      await booking.update({
+        status: 'charging',
+        actual_start: new Date()
+      }, { transaction });
+
+      // Create charging session if it doesn't exist
+      let chargingSession = await ChargingSession.findOne({
+        where: { booking_id: booking.booking_id },
+        transaction
+      });
+
+      if (!chargingSession) {
+        chargingSession = await ChargingSession.create({
+          booking_id: booking.booking_id,
+          start_battery_percent: null, // Will be set by first IoT update
+          energy_consumed: 0,
+          started_at: new Date()
+        }, { transaction });
       }
-    });
+
+      await transaction.commit();
+
+      res.status(200).json({
+        success: true,
+        message: 'Mã check-in hợp lệ. Bắt đầu sạc...',
+        data: {
+          booking_id: booking.booking_id,
+          status: 'charging',
+          can_start_charging: true,
+          station_id: booking.station_id
+        }
+      });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
     next(error);
   }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Filter, Calendar, Eye, X, MapPin, Clock, Lock } from 'lucide-react';
+import { Filter, Calendar, Eye, X, MapPin, Clock, Lock, Zap } from 'lucide-react';
 import ConfirmModal from '../../../components/shared/ConfirmModal';
 import AlertModal from '../../../components/shared/AlertModal';
 import { bookingService } from '../../../services/bookingService';
@@ -394,6 +394,17 @@ const BookingHistory = () => {
                 </div>
 
                 <div className="booking-actions">
+                  {/* Show "Monitor Charging" button if status is charging */}
+                  {(booking.status === 'charging' || booking.booking_status === 'charging') && (
+                    <button 
+                      className="action-btn action-btn-monitor"
+                      onClick={() => navigate(`/bookings/${booking.booking_id}/charging`)}
+                    >
+                      <Zap size={18} />
+                      <span>Theo dõi sạc</span>
+                    </button>
+                  )}
+                  
                   {/* Only show "Enter Code" and "Cancel" for pending or confirmed bookings */}
                   {(booking.booking_status === 'pending' || booking.status === 'pending' ||
                     booking.booking_status === 'confirmed' || booking.status === 'confirmed') && (
