@@ -433,7 +433,7 @@ exports.getBookingById = async (req, res, next) => {
         {
           model: Station,
           as: 'station',
-          attributes: ['station_id', 'station_name', 'address'],
+          attributes: ['station_id', 'station_name', 'address', 'price_per_kwh'],
           required: true
         },
         {
@@ -452,7 +452,7 @@ exports.getBookingById = async (req, res, next) => {
           model: Promotion,
           as: 'promotion',
           required: false,
-          attributes: ['promo_id', 'code', 'title', 'discount_percent']
+          attributes: ['promo_id', 'code', 'title', 'discount_percent', 'max_discount', 'min_amount']
         }
       ]
     });
@@ -526,10 +526,10 @@ exports.getBookingById = async (req, res, next) => {
         address: station?.address || null,
         vehicle_type: vehicleTypeDisplay
       },
-      // Thời gian sạc
+      // Thời gian sạc - ưu tiên started_at/ended_at từ ChargingSession
       charging_time: {
-        start: formatDateTime(bookingData.actual_start || bookingData.start_time),
-        end: formatDateTime(bookingData.actual_end || bookingData.end_time),
+        start: formatDateTime(chargingSession?.started_at || bookingData.actual_start || bookingData.start_time),
+        end: formatDateTime(chargingSession?.ended_at || bookingData.actual_end || bookingData.end_time),
         duration: duration
       },
       // Năng lượng
@@ -540,19 +540,59 @@ exports.getBookingById = async (req, res, next) => {
           ? parseFloat(chargingSession.energy_consumed) 
           : null
       },
-      // Thanh toán
+      // Thanh toán - tính discount nếu có promotion
       payment_info: {
         method: paymentMethodDisplay,
         status: paymentStatusDisplay,
         status_raw: payment?.status || null,
         discount_code: promotion?.code || null,
-        total_amount: totalCost
+        original_amount: totalCost, // Original cost before discount
+        discount_amount: (() => {
+          if (!promotion || !totalCost) return 0;
+          let discount = (totalCost * promotion.discount_percent) / 100;
+          if (promotion.max_discount && discount > parseFloat(promotion.max_discount)) {
+            discount = parseFloat(promotion.max_discount);
+          }
+          const minAmount = promotion.min_amount ? parseFloat(promotion.min_amount) : null;
+          if (minAmount && totalCost < minAmount) return 0;
+          return discount;
+        })(),
+        total_amount: (() => {
+          if (!promotion || !totalCost) return totalCost;
+          let discount = (totalCost * promotion.discount_percent) / 100;
+          if (promotion.max_discount && discount > parseFloat(promotion.max_discount)) {
+            discount = parseFloat(promotion.max_discount);
+          }
+          const minAmount = promotion.min_amount ? parseFloat(promotion.min_amount) : null;
+          if (minAmount && totalCost < minAmount) return totalCost;
+          return totalCost - discount;
+        })()
       }
     };
 
+    // Return both structured response AND raw data for compatibility
     res.status(200).json({
       success: true,
-      data: formattedResponse
+      data: {
+        // Structured response (for new UI)
+        ...formattedResponse,
+        // Raw data (for backward compatibility)
+        booking_id: bookingData.booking_id,
+        station: station,
+        station_id: bookingData.station_id,
+        vehicle_type: bookingData.vehicle_type,
+        actual_start: bookingData.actual_start || bookingData.start_time,
+        actual_end: bookingData.actual_end || bookingData.end_time,
+        start_time: bookingData.start_time,
+        end_time: bookingData.end_time,
+        total_cost: bookingData.total_cost,
+        status: bookingData.status,
+        chargingSession: chargingSession,
+        promotion: promotion,
+        payment: payment,
+        // Include price_per_kwh from station
+        price_per_kwh: station?.price_per_kwh || null
+      }
     });
   } catch (error) {
     next(error);

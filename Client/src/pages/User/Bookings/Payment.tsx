@@ -77,60 +77,70 @@ const Payment = () => {
         if (response.success && response.data) {
           const bookingData = response.data;
           
-          // Format booking data for display
-          // CRITICAL: Use actual_cost from chargingSession if available (tiền thực tế khi sạc)
-          const actualCost = bookingData.chargingSession?.actual_cost 
-            ? parseFloat(bookingData.chargingSession.actual_cost)
+          // Backend returns both structured data and raw data
+          // Use structured data if available, otherwise fallback to raw data
+          const stationInfo = bookingData.station_info || {};
+          const chargingTime = bookingData.charging_time || {};
+          const energyInfo = bookingData.energy_info || {};
+          const paymentInfo = bookingData.payment_info || {};
+          
+          // Get actual cost from payment_info (already has discount applied) or calculate
+          const originalCost = paymentInfo.original_amount || bookingData.chargingSession?.actual_cost 
+            ? parseFloat(bookingData.chargingSession?.actual_cost || paymentInfo.original_amount)
             : (bookingData.total_cost ? parseFloat(bookingData.total_cost) : 0);
           
-          // Calculate discount amount if promotion exists (Lỗi 1: Apply promotion discount)
-          let discountAmount = 0;
-          if (bookingData.promotion && actualCost > 0) {
-            const discountPercent = bookingData.promotion.discount_percent || 0;
-            let discount = (actualCost * discountPercent) / 100;
-            const maxDiscount = bookingData.promotion.max_discount ? parseFloat(bookingData.promotion.max_discount) : null;
-            if (maxDiscount && discount > maxDiscount) {
-              discount = maxDiscount;
-            }
-            // Check min_amount requirement
-            const minAmount = bookingData.promotion.min_amount ? parseFloat(bookingData.promotion.min_amount) : null;
-            if (!minAmount || actualCost >= minAmount) {
-              discountAmount = discount;
-            }
-          } else if (bookingData.discount_amount) {
-            discountAmount = parseFloat(bookingData.discount_amount);
-          }
+          // Get discount from payment_info or calculate
+          const discountAmount = paymentInfo.discount_amount || 0;
+          const finalCost = paymentInfo.total_amount || (originalCost - discountAmount);
           
-          const finalCost = actualCost - discountAmount;
+          // Get dates from charging_time or fallback to raw data
+          // Parse dates from formatted string or use raw dates
+          const parseDate = (dateStr: string | Date | null | undefined): Date | null => {
+            if (!dateStr) return null;
+            if (dateStr instanceof Date) return dateStr;
+            if (typeof dateStr === 'string') {
+              // Try parsing formatted date string (HH:mm:ss DD/MM/YYYY)
+              const match = dateStr.match(/(\d{2}):(\d{2}):(\d{2})\s+(\d{2})\/(\d{2})\/(\d{4})/);
+              if (match) {
+                const [, hours, minutes, seconds, day, month, year] = match;
+                return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes), parseInt(seconds));
+              }
+              // Try ISO date string
+              const parsed = new Date(dateStr);
+              if (!isNaN(parsed.getTime())) return parsed;
+            }
+            return null;
+          };
           
-          // Get dates from chargingSession if available (Lỗi 3: Ensure all fields populated)
-          const actualStart = bookingData.chargingSession?.started_at || bookingData.actual_start || bookingData.start_time;
-          const actualEnd = bookingData.chargingSession?.ended_at || bookingData.actual_end || bookingData.end_time;
+          const actualStart = parseDate(chargingTime.start) || 
+                             bookingData.chargingSession?.started_at || 
+                             bookingData.actual_start || 
+                             bookingData.start_time;
+          const actualEnd = parseDate(chargingTime.end) || 
+                           bookingData.chargingSession?.ended_at || 
+                           bookingData.actual_end || 
+                           bookingData.end_time;
           
           const formattedBooking = {
             booking_id: bookingData.booking_id,
-            station_name: bookingData.station?.station_name || 'N/A',
-            vehicle_type: bookingData.vehicle_type,
+            station_name: stationInfo.station_name || bookingData.station?.station_name || 'N/A',
+            vehicle_type: bookingData.vehicle_type || stationInfo.vehicle_type || null,
             actual_start: actualStart,
             actual_end: actualEnd,
-            start_battery_percent: bookingData.chargingSession?.start_battery_percent ?? null,
-            end_battery_percent: bookingData.chargingSession?.end_battery_percent ?? null,
-            energy_consumed: bookingData.chargingSession?.energy_consumed || 0,
-            price_per_kwh: bookingData.station?.price_per_kwh || 0,
-            promotion_code: bookingData.promotion?.code || null,
+            start_battery_percent: energyInfo.start_battery ?? bookingData.chargingSession?.start_battery_percent ?? null,
+            end_battery_percent: energyInfo.end_battery ?? bookingData.chargingSession?.end_battery_percent ?? null,
+            energy_consumed: energyInfo.energy_consumed ?? bookingData.chargingSession?.energy_consumed ?? 0,
+            price_per_kwh: bookingData.price_per_kwh ?? bookingData.station?.price_per_kwh ?? 0,
+            promotion_code: paymentInfo.discount_code || bookingData.promotion?.code || null,
             discount_percent: bookingData.promotion?.discount_percent || 0,
             max_discount: bookingData.promotion?.max_discount || 0,
-            original_cost: actualCost, // Use actual cost before discount
+            original_cost: originalCost,
             discount_amount: discountAmount,
-            total_cost: finalCost // Final cost after discount
+            total_cost: finalCost
           };
           
-          console.log('[Payment] Formatted booking:', {
-            original_cost: formattedBooking.original_cost,
-            discount: formattedBooking.discount_amount,
-            total_cost: formattedBooking.total_cost,
-            promotion_code: formattedBooking.promotion_code
-          });
+          console.log('[Payment] Formatted booking:', formattedBooking);
+          console.log('[Payment] Raw booking data:', bookingData);
           
           setBooking(formattedBooking);
         } else {
@@ -284,14 +294,34 @@ const Payment = () => {
               <div className="detail-content">
                 <span className="detail-label">Thời gian sạc</span>
                 <span className="detail-value">
-                  {booking.actual_start ? (
-                    <>
-                      {new Date(booking.actual_start).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                      {' - '}
-                      {booking.actual_end ? new Date(booking.actual_end).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Đang sạc'}
-                      {' '}({getChargingDuration()})
-                    </>
-                  ) : 'N/A'}
+                  {booking.actual_start ? (() => {
+                    try {
+                      const startDate = booking.actual_start instanceof Date 
+                        ? booking.actual_start 
+                        : new Date(booking.actual_start);
+                      const endDate = booking.actual_end 
+                        ? (booking.actual_end instanceof Date 
+                            ? booking.actual_end 
+                            : new Date(booking.actual_end))
+                        : null;
+                      
+                      if (isNaN(startDate.getTime())) return 'N/A';
+                      
+                      return (
+                        <>
+                          {startDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          {' - '}
+                          {endDate && !isNaN(endDate.getTime()) 
+                            ? endDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                            : 'Đang sạc'}
+                          {' '}({getChargingDuration()})
+                        </>
+                      );
+                    } catch (e) {
+                      console.error('[Payment] Error parsing dates:', e);
+                      return 'N/A';
+                    }
+                  })() : 'N/A'}
                 </span>
               </div>
             </div>
