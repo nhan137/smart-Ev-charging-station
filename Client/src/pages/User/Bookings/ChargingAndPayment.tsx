@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Filter, Calendar, Eye, X } from 'lucide-react';
+import { bookingService } from '../../../services/bookingService';
+import { stationService } from '../../../services/stationService';
 import './ChargingAndPayment.css';
 
 const ChargingAndPayment = () => {
@@ -12,9 +14,65 @@ const ChargingAndPayment = () => {
   });
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stations, setStations] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock booking history data
-  const bookings = [
+  // Load bookings from API
+  useEffect(() => {
+    loadBookings();
+  }, [filters]);
+
+  // Load stations for filter dropdown
+  useEffect(() => {
+    const loadStations = async () => {
+      try {
+        const response = await stationService.getAllStations();
+        if (response.success && response.data) {
+          const stationsData = Array.isArray(response.data) ? response.data : [];
+          setStations(stationsData);
+        }
+      } catch (err) {
+        console.error('Error loading stations:', err);
+      }
+    };
+    loadStations();
+  }, []);
+
+  const loadBookings = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await bookingService.getMyBookings({
+        status: filters.status || undefined,
+        from_date: filters.dateFrom || undefined,
+        to_date: filters.dateTo || undefined,
+        station_id: filters.station || undefined
+      });
+
+      if (response.success && response.data) {
+        // Filter only completed/cancelled bookings for charging history
+        // Backend returns booking_status, but also check status field
+        const completedBookings = response.data.filter((b: any) => {
+          const status = b.booking_status || b.status;
+          return status === 'completed' || status === 'cancelled';
+        });
+        setBookings(completedBookings);
+      } else {
+        setError('Không thể tải lịch sử sạc');
+      }
+    } catch (err: any) {
+      console.error('Error loading bookings:', err);
+      setError(err.message || 'Không thể tải lịch sử sạc');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Mock booking history data (removed - using API now)
+  const oldBookings = [
     {
       booking_id: 1,
       station_name: 'Trạm sạc Hải Châu',
@@ -161,9 +219,11 @@ const ChargingAndPayment = () => {
                     onChange={(e) => setFilters({ ...filters, station: e.target.value })}
                   >
                     <option value="">Tất cả trạm</option>
-                    <option value="1">Trạm sạc Hải Châu</option>
-                    <option value="2">Trạm sạc Sơn Trà Premium</option>
-                    <option value="3">Trạm sạc Ngũ Hành Sơn</option>
+                    {stations.map((station) => (
+                      <option key={station.station_id} value={station.station_id}>
+                        {station.station_name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -185,14 +245,26 @@ const ChargingAndPayment = () => {
 
         {/* Bookings List */}
         <div className="bookings-list">
-          {bookings.length === 0 ? (
+          {loading ? (
+            <div className="empty-state">
+              <Calendar size={64} />
+              <h3>Đang tải...</h3>
+              <p>Vui lòng chờ trong giây lát</p>
+            </div>
+          ) : error ? (
+            <div className="empty-state">
+              <Calendar size={64} />
+              <h3>Lỗi</h3>
+              <p>{error}</p>
+            </div>
+          ) : bookings.length === 0 ? (
             <div className="empty-state">
               <Calendar size={64} />
               <h3>Chưa có lịch sử sạc</h3>
               <p>Các lần sạc của bạn sẽ hiển thị tại đây</p>
             </div>
           ) : (
-            bookings.map((booking) => (
+            bookings.map((booking: any) => (
               <div key={booking.booking_id} className="booking-card">
                 <div className="booking-header-row">
                   <div className="booking-id">
@@ -200,7 +272,7 @@ const ChargingAndPayment = () => {
                     <span className="id-value">#{booking.booking_id}</span>
                   </div>
                   <div className="booking-statuses">
-                    {getStatusBadge(booking.booking_status, 'booking')}
+                    {getStatusBadge(booking.booking_status || booking.status, 'booking')}
                     {getStatusBadge(booking.payment_status, 'payment')}
                   </div>
                 </div>
@@ -220,37 +292,37 @@ const ChargingAndPayment = () => {
                     <div className="info-item">
                       <span className="info-label">Ngày sạc</span>
                       <span className="info-value">
-                        {new Date(booking.start_time).toLocaleDateString('vi-VN')}
+                        {booking.charging_date || (booking.actual_start ? new Date(booking.actual_start).toLocaleDateString('vi-VN') : booking.start_time ? new Date(booking.start_time).toLocaleDateString('vi-VN') : 'N/A')}
                       </span>
                     </div>
 
                     <div className="info-item">
                       <span className="info-label">Thời lượng</span>
                       <span className="info-value">
-                        {getDuration(booking.actual_start, booking.actual_end)}
+                        {booking.duration || (booking.actual_start && booking.actual_end ? getDuration(booking.actual_start, booking.actual_end) : 'N/A')}
                       </span>
                     </div>
 
                     <div className="info-item">
                       <span className="info-label">% pin</span>
                       <span className="info-value">
-                        {booking.start_battery_percent}% → {booking.end_battery_percent}%
+                        {booking.battery_range || (booking.start_battery_percent !== undefined && booking.end_battery_percent !== undefined ? `${booking.start_battery_percent}% → ${booking.end_battery_percent}%` : 'N/A')}
                       </span>
                     </div>
 
                     <div className="info-item">
                       <span className="info-label">Năng lượng</span>
-                      <span className="info-value">{booking.energy_consumed} kWh</span>
+                      <span className="info-value">{booking.energy_consumed ? `${booking.energy_consumed} kWh` : 'N/A'}</span>
                     </div>
 
                     <div className="info-item">
                       <span className="info-label">Phương thức TT</span>
-                      <span className="info-value">{booking.payment_method}</span>
+                      <span className="info-value">{booking.payment_method_display || booking.payment_method || 'N/A'}</span>
                     </div>
 
                     <div className="info-item highlight">
                       <span className="info-label">Tổng tiền</span>
-                      <span className="info-value total">{booking.total_cost.toLocaleString()}đ</span>
+                      <span className="info-value total">{booking.total_cost ? booking.total_cost.toLocaleString('vi-VN') + 'đ' : 'N/A'}</span>
                     </div>
                   </div>
                 </div>
@@ -299,15 +371,15 @@ const ChargingAndPayment = () => {
               <div className="modal-info-grid">
                 <div className="modal-info-item">
                   <span>Bắt đầu:</span>
-                  <span>{new Date(selectedBooking.actual_start).toLocaleString('vi-VN')}</span>
+                  <span>{selectedBooking.actual_start ? new Date(selectedBooking.actual_start).toLocaleString('vi-VN') : (selectedBooking.start_time ? new Date(selectedBooking.start_time).toLocaleString('vi-VN') : 'N/A')}</span>
                 </div>
                 <div className="modal-info-item">
                   <span>Kết thúc:</span>
-                  <span>{new Date(selectedBooking.actual_end).toLocaleString('vi-VN')}</span>
+                  <span>{selectedBooking.actual_end ? new Date(selectedBooking.actual_end).toLocaleString('vi-VN') : (selectedBooking.end_time ? new Date(selectedBooking.end_time).toLocaleString('vi-VN') : 'N/A')}</span>
                 </div>
                 <div className="modal-info-item">
                   <span>Thời lượng:</span>
-                  <span>{getDuration(selectedBooking.actual_start, selectedBooking.actual_end)}</span>
+                  <span>{selectedBooking.duration || (selectedBooking.actual_start && selectedBooking.actual_end ? getDuration(selectedBooking.actual_start, selectedBooking.actual_end) : 'N/A')}</span>
                 </div>
               </div>
             </div>
@@ -317,15 +389,15 @@ const ChargingAndPayment = () => {
               <div className="modal-info-grid">
                 <div className="modal-info-item">
                   <span>Pin ban đầu:</span>
-                  <span>{selectedBooking.start_battery_percent}%</span>
+                  <span>{selectedBooking.start_battery_percent !== undefined ? `${selectedBooking.start_battery_percent}%` : 'N/A'}</span>
                 </div>
                 <div className="modal-info-item">
                   <span>Pin sau sạc:</span>
-                  <span>{selectedBooking.end_battery_percent}%</span>
+                  <span>{selectedBooking.end_battery_percent !== undefined ? `${selectedBooking.end_battery_percent}%` : 'N/A'}</span>
                 </div>
                 <div className="modal-info-item">
                   <span>Năng lượng tiêu thụ:</span>
-                  <span>{selectedBooking.energy_consumed} kWh</span>
+                  <span>{selectedBooking.energy_consumed ? `${selectedBooking.energy_consumed} kWh` : 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -335,7 +407,7 @@ const ChargingAndPayment = () => {
               <div className="modal-info-grid">
                 <div className="modal-info-item">
                   <span>Phương thức:</span>
-                  <span>{selectedBooking.payment_method}</span>
+                  <span>{selectedBooking.payment_method_display || selectedBooking.payment_method || 'N/A'}</span>
                 </div>
                 <div className="modal-info-item">
                   <span>Trạng thái:</span>
@@ -349,7 +421,7 @@ const ChargingAndPayment = () => {
                 )}
                 <div className="modal-info-item highlight">
                   <span>Tổng tiền:</span>
-                  <span className="total-value">{selectedBooking.total_cost.toLocaleString()}đ</span>
+                  <span className="total-value">{selectedBooking.total_cost ? selectedBooking.total_cost.toLocaleString('vi-VN') + 'đ' : 'N/A'}</span>
                 </div>
               </div>
             </div>

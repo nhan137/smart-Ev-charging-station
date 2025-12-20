@@ -94,6 +94,11 @@ const MailBox = () => {
     try {
       setLoading(true);
       
+      // Log current user info
+      const currentUser = authService.getCurrentUser();
+      console.log('[MailBox] Current user:', currentUser);
+      console.log('[MailBox] User ID:', currentUser?.user_id || currentUser?.id);
+      
       // Load stations
       const stationsResponse = await managerService.getManagerStations();
       if (stationsResponse.success && stationsResponse.data) {
@@ -110,9 +115,14 @@ const MailBox = () => {
       
       if (reportsResponse.success && reportsResponse.data) {
         const reportsData = Array.isArray(reportsResponse.data) ? reportsResponse.data : (reportsResponse.data.reports || []);
+        console.log('[MailBox] Full API Response:', JSON.stringify(reportsResponse, null, 2));
+        console.log('[MailBox] Reports data array:', reportsData);
         console.log('[MailBox] Loaded reports:', reportsData.length);
         const normalized = normalizeManagerReports(reportsData);
+        console.log('[MailBox] Normalized reports:', normalized);
         setReports(normalized);
+      } else {
+        console.warn('[MailBox] Response not successful or no data:', reportsResponse);
       }
     } catch (error: any) {
       console.error('Error loading data:', error);

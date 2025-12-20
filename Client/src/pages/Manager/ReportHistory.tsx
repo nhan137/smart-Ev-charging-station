@@ -3,25 +3,24 @@ import { FileText, Loader2 } from 'lucide-react';
 import { managerService } from '../../services/managerService';
 import './ReportHistory.css';
 
-type ReportStatus = 'pending_admin' | 'admin_handled';
+type ReportStatus = 'resolved';
 
-type AdminReportItem = {
+type ManagerReportHistoryItem = {
   report_id: string;
   station_id: number;
   station_name: string;
   title: string;
   status: ReportStatus;
   reported_at: string;
+  updated_at?: string;
 };
 
 const statusLabel = (s: ReportStatus) => {
   switch (s) {
-    case 'pending_admin':
-      return 'Đang chờ ';
-    case 'admin_handled':
+    case 'resolved':
       return 'Đã xử lý';
     default:
-      return s;
+      return 'Đã xử lý';
   }
 };
 
@@ -31,11 +30,10 @@ const formatDateTime = (iso: string) => {
   return d.toLocaleString('vi-VN');
 };
 
-const normalize = (input: any[]): AdminReportItem[] => {
+const normalize = (input: any[]): ManagerReportHistoryItem[] => {
   return (input || []).map((r: any) => {
-    const rawStatus: string = r.status;
-    // Backend trả về status: 'pending' (chờ Admin xử lý) hoặc 'admin_handled' (Admin đã xử lý)
-    const status: ReportStatus = rawStatus === 'admin_handled' || rawStatus === 'resolved' ? 'admin_handled' : 'pending_admin';
+    // Backend chỉ trả về báo cáo đã được xử lý (status = 'resolved')
+    const status: ReportStatus = 'resolved';
 
     return {
       report_id: r.report_id || r.id || `REP-${Date.now()}`,
@@ -49,7 +47,7 @@ const normalize = (input: any[]): AdminReportItem[] => {
 };
 
 const ReportHistory = () => {
-  const [reports, setReports] = useState<AdminReportItem[]>([]);
+  const [reports, setReports] = useState<ManagerReportHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,8 +86,8 @@ const ReportHistory = () => {
             <FileText size={22} />
           </div>
           <div>
-            <h1>Lịch sử báo cáo gửi lên Admin</h1>
-            <p>Danh sách các báo cáo đã được chuyển lên admin để xử lý</p>
+            <h1>Lịch sử báo cáo đã xử lý</h1>
+            <p>Danh sách các báo cáo từ User đã được bạn xử lý trong Hộp thư</p>
           </div>
         </div>
       </div>

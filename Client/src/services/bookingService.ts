@@ -45,9 +45,20 @@ export const bookingService = {
   },
 
   // Get user's bookings (for "Lịch sử sạc & thanh toán")
-  getMyBookings: async () => {
+  getMyBookings: async (filters?: {
+    status?: string;
+    from_date?: string;
+    to_date?: string;
+    station_id?: string;
+  }) => {
     try {
-      const response = await api.get('/bookings/my');
+      const params = new URLSearchParams();
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.from_date) params.append('from_date', filters.from_date);
+      if (filters?.to_date) params.append('to_date', filters.to_date);
+      if (filters?.station_id) params.append('station_id', filters.station_id);
+      
+      const response = await api.get(`/bookings/my?${params.toString()}`);
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Không thể tải lịch sử đặt lịch');

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
@@ -13,6 +13,8 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { authService } from '../../../services/authService';
+import { reportService } from '../../../services/reportService';
+import { stationService } from '../../../services/stationService';
 import './UserReportForm.css';
 
 // Mock data types
@@ -51,36 +53,8 @@ const UserReportForm: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentUser = authService.getCurrentUser();
 
-  const [stations] = useState<Station[]>([
-    {
-      id: '1',
-      name: 'Trạm sạc Hải Châu',
-      address: '123 Trần Phú, Hải Châu, Đà Nẵng',
-      visited: true,
-      image: 'https://images.unsplash.com/photo-1622737133809-d95047b9e673?w=300&h=200&fit=crop'
-    },
-    {
-      id: '2',
-      name: 'Trạm sạc Sơn Trà',
-      address: '456 Võ Nguyên Giáp, Sơn Trà, Đà Nẵng',
-      visited: true,
-      image: 'https://images.unsplash.com/photo-1593941707882-a5bba5338fe2?w=300&h=200&fit=crop'
-    },
-    {
-      id: '3',
-      name: 'Trạm sạc Ngũ Hành Sơn',
-      address: '789 Ngũ Hành Sơn, Đà Nẵng',
-      visited: false,
-      image: 'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=300&h=200&fit=crop'
-    },
-    {
-      id: '4',
-      name: 'Trạm sạc Cầu Rồng',
-      address: '101 Bạch Đằng, Hải Châu, Đà Nẵng',
-      visited: true,
-      image: 'https://images.unsplash.com/photo-1629654291660-3c98113a0438?w=300&h=200&fit=crop'
-    }
-  ]);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [loadingStations, setLoadingStations] = useState(true);
 
   const [formData, setFormData] = useState<ReportFormData>({
     stationId: '',
@@ -89,17 +63,54 @@ const UserReportForm: React.FC = () => {
     images: []
   });
 
-  const [errors, setErrors] = useState<Partial<Record<keyof ReportFormData, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof ReportFormData | 'submit', string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [showAllStations, setShowAllStations] = useState(false);
 
-  const filteredStations = showAllStations
-    ? stations
-    : stations.filter(station => station.visited);
+  // Filter stations: if showAllStations is true, show all; otherwise show all (since visited is not implemented yet)
+  // TODO: Implement visited logic based on user's booking history
+  const filteredStations = showAllStations ? stations : stations; // For now, show all stations
 
   const selectedStation = stations.find(station => station.id === formData.stationId);
+
+  // Load stations from API
+  useEffect(() => {
+    const loadStations = async () => {
+      try {
+        setLoadingStations(true);
+        const response = await stationService.getAllStations();
+        console.log('[UserReportForm] API Response:', response);
+        
+        if (response && response.success && response.data) {
+          // response.data is already an array of stations
+          const stationsData = Array.isArray(response.data) ? response.data : [];
+          console.log('[UserReportForm] Stations data:', stationsData);
+          
+          // Map API response to Station format
+          const mappedStations: Station[] = stationsData.map((s: any) => ({
+            id: s.station_id?.toString() || s.id?.toString() || '',
+            name: s.station_name || s.name || '',
+            address: s.address || '',
+            visited: false, // TODO: Check if user has booked this station
+            image: s.avatar_url || s.image_url || 'https://images.unsplash.com/photo-1622737133809-d95047b9e673?w=300&h=200&fit=crop'
+          }));
+          
+          console.log('[UserReportForm] Mapped stations:', mappedStations);
+          setStations(mappedStations);
+        } else {
+          console.warn('[UserReportForm] Invalid response format:', response);
+        }
+      } catch (error: any) {
+        console.error('[UserReportForm] Error loading stations:', error);
+        console.error('[UserReportForm] Error details:', error.response?.data || error.message);
+      } finally {
+        setLoadingStations(false);
+      }
+    };
+    loadStations();
+  }, []);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -153,51 +164,44 @@ const { name, value } = e.target;
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const existing = sessionStorage.getItem('user_reports');
-      const reports: ReportHistoryItem[] = existing ? JSON.parse(existing) : [];
-
-      const nowIso = new Date().toISOString();
-      const stationName = selectedStation?.name || 'Không rõ';
-      const reportId = `REP-${Date.now()}`;
-
-      reports.push({
-        report_id: reportId,
-        user_id: currentUser?.user_id || 0,
-        user_name: currentUser?.full_name || 'Người dùng',
-        station_id: formData.stationId,
-        station_name: stationName,
+    try {
+      // Gửi báo cáo qua API
+      const response = await reportService.createReport({
+        station_id: parseInt(formData.stationId),
         title: formData.title,
         description: formData.description,
-        status: 'pending',
-        reported_at: nowIso,
-        last_update_at: nowIso,
-        images: imagePreviews,
-        status_history: [
-          {
-            status: 'pending',
-            at: nowIso,
-            note: 'Báo cáo đã được tạo'
-          }
-        ]
+        images: formData.images
       });
 
-      sessionStorage.setItem('user_reports', JSON.stringify(reports));
-
-      imagePreviews.forEach(p => URL.revokeObjectURL(p));
-setFormData({ stationId: '', title: '', description: '', images: [] });
-      setImagePreviews([]);
+      if (response.success) {
+        // Clear form
+        imagePreviews.forEach(p => URL.revokeObjectURL(p));
+        setFormData({ stationId: '', title: '', description: '', images: [] });
+        setImagePreviews([]);
+        setSubmitSuccess(true);
+        
+        setTimeout(() => {
+          setSubmitSuccess(false);
+          navigate('/user/report/history');
+        }, 2000);
+      } else {
+        throw new Error(response.message || 'Gửi báo cáo thất bại');
+      }
+    } catch (error: any) {
+      console.error('Error submitting report:', error);
+      setErrors({ 
+        ...errors, 
+        submit: error.message || 'Không thể gửi báo cáo. Vui lòng thử lại.' 
+      });
+    } finally {
       setIsSubmitting(false);
-      setSubmitSuccess(true);
-
-      setTimeout(() => setSubmitSuccess(false), 5000);
-    }, 1500);
+    }
   };
 
   const handleCameraClick = () => {
@@ -270,8 +274,9 @@ setFormData({ stationId: '', title: '', description: '', images: [] });
             value={formData.stationId}
             onChange={handleInputChange}
             className={`station-select ${errors.stationId ? 'error' : ''}`}
+            disabled={loadingStations}
           >
-            <option value="">Chọn trạm sạc</option>
+            <option value="">{loadingStations ? 'Đang tải...' : filteredStations.length === 0 ? 'Không có trạm sạc' : 'Chọn trạm sạc'}</option>
             {filteredStations.map(station => (
               <option key={station.id} value={station.id}>
                 {station.name} {station.visited ? '✓' : ''}
@@ -374,10 +379,15 @@ setFormData({ stationId: '', title: '', description: '', images: [] });
 
         {/* Nút gửi báo cáo */}
         <div className="form-actions">
+          {errors.submit && (
+            <div className="error-message" style={{ marginBottom: '1rem' }}>
+              {errors.submit}
+            </div>
+          )}
           <button
             type="submit"
             className="submit-button"
-            disabled={isSubmitting}
+            disabled={isSubmitting || loadingStations}
           >
             {isSubmitting ? (
               <>

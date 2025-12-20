@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock, FileText, MapPin, X } from 'lucide-react';
-import { mockReports } from '../../../services/mockData';
+import { reportService } from '../../../services/reportService';
 import './UserReportHistory.css';
 
 type ReportStatus = 'pending' | 'handled';
@@ -45,7 +45,9 @@ const formatDateTime = (iso?: string) => {
 const normalizeReports = (input: any[]): UserReport[] => {
   return (input || [])
     .map((r: any) => {
-      const report_id = r.report_id || r.id || r.reportId || `REP-${Date.now()}`;
+      // Backend returns: report_id, report_code, station_id, station_name, title, description, status, reported_at
+      // report_code is like "REP-0001", report_id is numeric
+      const report_id = r.report_code || (r.report_id ? `REP-${String(r.report_id).padStart(4, '0')}` : null) || r.id || r.reportId || `REP-${Date.now()}`;
       const station_name = r.station_name || r.stationName || r.station?.station_name || r.station?.name || 'Không rõ';
       const title = r.title || '';
       const description = r.description || '';
@@ -73,33 +75,50 @@ const normalizeReports = (input: any[]): UserReport[] => {
           ? 'handled'
           : 'pending';
 
-      const images: string[] = Array.isArray(r.images) ? r.images : [];
+      // Parse image_url from backend (can be JSON array string or single URL)
+      let images: string[] = [];
+      if (r.image_url) {
+        try {
+          const parsed = JSON.parse(r.image_url);
+          images = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+          // If not JSON, treat as single URL or comma-separated
+          if (r.image_url.includes(',')) {
+            images = r.image_url.split(',').map((url: string) => url.trim()).filter((url: string) => url);
+          } else {
+            images = [r.image_url];
+          }
+        }
+      } else if (Array.isArray(r.images)) {
+        images = r.images;
+      }
 
-      const rawHistory = Array.isArray(r.status_history)
-        ? r.status_history
-        : Array.isArray(r.statusHistory)
-          ? r.statusHistory
-          : null;
-
-      const status_history: StatusHistoryItem[] = rawHistory
-        ? rawHistory.map((h: any) => {
-            const hs: string = h.status;
-            const normalizedStatus: ReportStatus =
-              hs === 'handled' || hs === 'manager_handled' || hs === 'admin_handled' || hs === 'resolved' || hs === 'in_progress'
-                ? 'handled'
-                : 'pending';
-            return {
-              status: normalizedStatus,
-              at: h.at,
-              note: h.note
-};
-          })
-        : [
-            {
-              status,
-              at: last_update_at || reported_at
-            }
-          ];
+      // Build status_history from backend response or create default
+      let status_history: StatusHistoryItem[] = [];
+      if (r.status_history && Array.isArray(r.status_history)) {
+        // Backend returns status_history with status, timestamp, description
+        status_history = r.status_history.map((h: any) => {
+          const hs: string = h.status || h.label || '';
+          const normalizedStatus: ReportStatus =
+            hs === 'handled' || hs === 'manager_handled' || hs === 'admin_handled' || hs === 'resolved' || hs === 'in_progress'
+              ? 'handled'
+              : 'pending';
+          return {
+            status: normalizedStatus,
+            at: h.timestamp || h.at || reported_at,
+            note: h.description || h.note
+          };
+        });
+      } else {
+        // Default status_history
+        status_history = [
+          {
+            status,
+            at: last_update_at || reported_at,
+            note: status === 'handled' ? 'Báo cáo đã được xử lý' : 'Báo cáo đang chờ xử lý'
+          }
+        ];
+      }
 
       return {
         report_id,
@@ -120,12 +139,62 @@ const normalizeReports = (input: any[]): UserReport[] => {
 const UserReportHistory = () => {
   const [reports, setReports] = useState<UserReport[]>([]);
   const [selected, setSelected] = useState<UserReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Load reports from API
   useEffect(() => {
-    setReports(normalizeReports(mockReports as any));
+    const loadReports = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await reportService.getMyReports();
+        
+        if (response.success && response.data) {
+          const normalizedReports = normalizeReports(response.data);
+          setReports(normalizedReports);
+        } else {
+          setError('Không thể tải lịch sử báo cáo');
+        }
+      } catch (err: any) {
+        console.error('[UserReportHistory] Error loading reports:', err);
+        setError(err.message || 'Không thể tải lịch sử báo cáo');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadReports();
   }, []);
 
-  const empty = reports.length === 0;
+  // Load detailed report when selected (to get images and full status_history)
+  useEffect(() => {
+    const loadReportDetail = async () => {
+      if (!selected) return;
+      
+      // Extract numeric report_id from report_code (e.g., "REP-0001" -> "1")
+      // Backend API expects numeric ID
+      let numericId = selected.report_id;
+      if (selected.report_id.startsWith('REP-')) {
+        numericId = selected.report_id.replace('REP-', '').replace(/^0+/, '') || selected.report_id;
+      }
+      
+      try {
+        const response = await reportService.getReportDetail(numericId);
+        if (response.success && response.data) {
+          const detailedReport = normalizeReports([response.data])[0];
+          setSelected(detailedReport);
+        }
+      } catch (err: any) {
+        console.error('[UserReportHistory] Error loading report detail:', err);
+        // If detail load fails, keep the selected report as is (it already has basic info)
+      }
+    };
+    
+    loadReportDetail();
+  }, [selected?.report_id]);
+
+  const empty = !loading && reports.length === 0;
 
   const tableRows = useMemo(() => reports, [reports]);
 
@@ -143,7 +212,23 @@ const UserReportHistory = () => {
         </div>
       </div>
 
-      {empty ? (
+      {loading ? (
+        <div className="empty-state">
+          <div className="empty-icon">
+            <FileText size={40} />
+          </div>
+          <h2>Đang tải...</h2>
+          <p>Vui lòng chờ trong giây lát</p>
+        </div>
+      ) : error ? (
+        <div className="empty-state">
+          <div className="empty-icon">
+            <FileText size={40} />
+          </div>
+          <h2>Lỗi</h2>
+          <p>{error}</p>
+        </div>
+      ) : empty ? (
         <div className="empty-state">
           <div className="empty-icon">
             <FileText size={40} />

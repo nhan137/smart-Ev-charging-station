@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Star, MapPin, DollarSign, X, Send, Image as ImageIcon } from 'lucide-react';
 import { stationService } from '../../services/stationService';
 import { feedbackService } from '../../services/feedbackService';
-import { mockFeedbacks } from '../../services/mockData';
+import { bookingService } from '../../services/bookingService';
 import StationDetailModal from './Stations/StationDetailModal';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 import AlertModal from '../../components/shared/AlertModal';
@@ -37,11 +37,21 @@ const FeedbacksAndFavorites = () => {
   const loadData = async () => {
     if (activeTab === 'feedback') {
       // Load completed bookings for feedback
-      // Mock data - replace with actual API call
-      setCompletedBookings([
-        { booking_id: 1, station_id: 1, station_name: 'Trạm sạc Hải Châu' },
-        { booking_id: 2, station_id: 2, station_name: 'Trạm sạc Sơn Trà Premium' }
-      ]);
+      try {
+        const response = await bookingService.getMyBookings({ status: 'completed' });
+        if (response.success && response.data) {
+          // Map to format needed for dropdown
+          const mappedBookings = response.data.map((b: any) => ({
+            booking_id: b.booking_id,
+            station_id: b.station_id || b.station?.station_id,
+            station_name: b.station_name || b.station?.station_name || 'Không rõ'
+          }));
+          setCompletedBookings(mappedBookings);
+        }
+      } catch (error) {
+        console.error('Error loading completed bookings:', error);
+        setCompletedBookings([]);
+      }
     } else {
       loadFavorites();
     }
@@ -278,9 +288,9 @@ const FeedbacksAndFavorites = () => {
             ) : (
               <div className="favorites-grid">
                 {favorites.map((station) => {
-                  const stationFeedbacks = mockFeedbacks.filter(f => f.station_id === station.station_id);
-                  const avgRating = stationFeedbacks.length > 0
-                    ? (stationFeedbacks.reduce((sum, f) => sum + f.rating, 0) / stationFeedbacks.length).toFixed(1)
+                  // Use avg_rating from API response if available
+                  const avgRating = station.avg_rating !== undefined 
+                    ? parseFloat(station.avg_rating).toFixed(1)
                     : '0.0';
 
                   return (

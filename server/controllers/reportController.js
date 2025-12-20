@@ -243,6 +243,7 @@ exports.managerResolveReport = async (req, res, next) => {
       });
     }
 
+    // Update status (bảng reports không có cột updated_at, chỉ có reported_at)
     await conn.query('UPDATE reports SET status = ? WHERE report_id = ?', [
       'resolved',
       report_id
@@ -415,10 +416,12 @@ exports.getManagerHistory = async (req, res, next) => {
   try {
     conn = await pool.getConnection();
 
+    // Lấy báo cáo từ User (role_id = 1) đã được Manager xử lý (status = 'resolved')
+    // Đây là báo cáo đã được Manager phê duyệt trong MailBox
     const [rows] = await conn.query(
       `SELECT
          r.report_id,
-         CONCAT('MREP-', LPAD(r.report_id, 4, '0')) AS report_code,
+         CONCAT('REP-', LPAD(r.report_id, 4, '0')) AS report_code,
          r.station_id,
          s.station_name,
          r.title,
@@ -426,8 +429,10 @@ exports.getManagerHistory = async (req, res, next) => {
          r.reported_at
        FROM reports r
        JOIN stations s ON r.station_id = s.station_id
-       WHERE r.reporter_id = ?
-         AND r.reporter_id IN (SELECT user_id FROM users WHERE role_id = 2)
+       JOIN users u ON r.reporter_id = u.user_id
+       WHERE s.manager_id = ?
+         AND u.role_id = 1
+         AND r.status = 'resolved'
        ORDER BY r.reported_at DESC`,
       [managerId]
     );
@@ -593,7 +598,7 @@ exports.updateReportStatus = async (req, res, next) => {
       });
     }
 
-    await conn.query('UPDATE reports SET status = ?, updated_at = NOW() WHERE report_id = ?', [
+    await conn.query('UPDATE reports SET status = ? WHERE report_id = ?', [
       status,
       report_id
     ]);
@@ -745,7 +750,7 @@ exports.getMyReports = async (req, res, next) => {
          r.description,
          r.status,
          r.reported_at,
-         r.reported_at AS updated_at
+         r.reported_at
        FROM reports r
        JOIN stations s ON r.station_id = s.station_id
        WHERE r.reporter_id = ?
@@ -785,7 +790,7 @@ exports.getUserReportDetail = async (req, res, next) => {
          r.image_url,
          r.status,
          r.reported_at,
-         COALESCE(r.updated_at, r.reported_at) AS updated_at
+         r.reported_at
        FROM reports r
        JOIN stations s ON r.station_id = s.station_id
        WHERE r.report_id = ?
@@ -834,7 +839,7 @@ exports.getUserReportDetail = async (req, res, next) => {
       statusHistory.push({
         status: 'resolved',
         label: 'Đã xử lý',
-        timestamp: report.updated_at,
+        timestamp: report.reported_at,
         description: 'Báo cáo đã được Quản lý xử lý'
       });
     }
@@ -851,7 +856,7 @@ exports.getUserReportDetail = async (req, res, next) => {
       status: report.status,
       status_label: report.status === 'pending' ? 'Đang chờ' : 'Đã xử lý',
       reported_at: report.reported_at,
-      updated_at: report.updated_at,
+      reported_at: report.reported_at,
       status_history: statusHistory
     };
 
@@ -892,8 +897,7 @@ exports.getManagerInbox = async (req, res, next) => {
       params.push(status);
     }
 
-    const [rows] = await conn.query(
-      `SELECT
+    const query = `SELECT
          r.report_id,
          CONCAT('REP-', LPAD(r.report_id, 4, '0')) AS report_code,
          u.full_name AS reporter_name,
@@ -903,14 +907,42 @@ exports.getManagerInbox = async (req, res, next) => {
          r.description,
          r.status,
          r.reported_at,
-         r.reported_at AS updated_at
+         r.reported_at
        FROM reports r
        JOIN stations s ON r.station_id = s.station_id
        JOIN users u ON r.reporter_id = u.user_id
        WHERE ${whereClauses.join(' AND ')}
-       ORDER BY r.reported_at DESC`,
-      params
-    );
+       ORDER BY r.reported_at DESC`;
+
+    // Debug log để kiểm tra
+    console.log(`\n[getManagerInbox] ==========================================`);
+    console.log(`[getManagerInbox] Manager ID: ${managerId}`);
+    console.log(`[getManagerInbox] Query: ${query}`);
+    console.log(`[getManagerInbox] Params:`, params);
+
+    const [rows] = await conn.query(query, params);
+    console.log(`[getManagerInbox] Found ${rows.length} reports from Users (role_id = 1) with status = 'pending'`);
+    if (rows.length > 0) {
+      console.log('[getManagerInbox] Sample report:', JSON.stringify(rows[0], null, 2));
+    } else {
+      // Kiểm tra xem Manager có stations không
+      const [managerStations] = await conn.query(
+        `SELECT station_id, station_name FROM stations WHERE manager_id = ?`,
+        [managerId]
+      );
+      console.log(`[getManagerInbox] Manager has ${managerStations.length} stations:`, managerStations);
+      
+      // Kiểm tra tất cả reports từ User (không filter status)
+      const [allUserReports] = await conn.query(
+        `SELECT r.report_id, r.status, r.title, u.full_name, s.station_name
+         FROM reports r
+         JOIN users u ON r.reporter_id = u.user_id
+         JOIN stations s ON r.station_id = s.station_id
+         WHERE s.manager_id = ? AND u.role_id = 1`,
+        [managerId]
+      );
+      console.log(`[getManagerInbox] Total reports from Users (any status): ${allUserReports.length}`, allUserReports);
+    }
 
     // Format response để khớp với UI (Hình 10)
     const formattedRows = rows.map(row => ({
@@ -924,7 +956,6 @@ exports.getManagerInbox = async (req, res, next) => {
       status: row.status, // pending | resolved
       status_label: row.status === 'resolved' ? 'resolved' : 'pending', // Để hiển thị badge
       reported_at: row.reported_at, // Thời gian báo cáo
-      updated_at: row.updated_at
     }));
 
     return res.json({

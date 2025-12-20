@@ -55,7 +55,7 @@ export const stationService = {
 
   getFavorites: async () => {
     try {
-      const response = await api.get('/favorites');
+      const response = await api.get('/favorites/my');
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Không thể tải danh sách yêu thích');
