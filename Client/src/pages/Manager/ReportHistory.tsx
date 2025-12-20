@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { FileText } from 'lucide-react';
-import { authService } from '../../services/authService';
-import { getNextId, mockAdminReports, mockManagerNotifications } from '../../services/mockData';
+import { useEffect, useMemo, useState } from 'react';
+import { FileText, Loader2 } from 'lucide-react';
+import { managerService } from '../../services/managerService';
 import './ReportHistory.css';
 
 type ReportStatus = 'pending_admin' | 'admin_handled';
@@ -35,7 +34,8 @@ const formatDateTime = (iso: string) => {
 const normalize = (input: any[]): AdminReportItem[] => {
   return (input || []).map((r: any) => {
     const rawStatus: string = r.status;
-    const status: ReportStatus = rawStatus === 'admin_handled' ? 'admin_handled' : 'pending_admin';
+    // Backend trả về status: 'pending' (chờ Admin xử lý) hoặc 'admin_handled' (Admin đã xử lý)
+    const status: ReportStatus = rawStatus === 'admin_handled' || rawStatus === 'resolved' ? 'admin_handled' : 'pending_admin';
 
     return {
       report_id: r.report_id || r.id || `REP-${Date.now()}`,
@@ -49,61 +49,36 @@ const normalize = (input: any[]): AdminReportItem[] => {
 };
 
 const ReportHistory = () => {
-  const user = authService.getCurrentUser();
   const [reports, setReports] = useState<AdminReportItem[]>([]);
-  const notifiedHandledIdsRef = useRef<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = () => {
-      const next = normalize(mockAdminReports as any);
-
-      const managedStationIds: number[] = user?.managed_stations || [];
-      const newlyHandled = next.filter(
-        (r) =>
-          managedStationIds.includes(r.station_id) &&
-          r.status === 'admin_handled' &&
-          !notifiedHandledIdsRef.current.has(r.report_id)
-      );
-
-      if (newlyHandled.length > 0) {
-        const nowIso = new Date().toISOString();
-        newlyHandled.forEach((r) => {
-          notifiedHandledIdsRef.current.add(r.report_id);
-          const notificationId = getNextId(mockManagerNotifications as any, 'notification_id');
-          (mockManagerNotifications as any).push({
-            notification_id: notificationId,
-            title: 'Admin đã phê duyệt / xử lý báo cáo',
-            message: `Báo cáo ${r.report_id} tại ${r.station_name} đã được Admin xử lý.`,
-            type: 'system',
-            recipients: 'specific',
-            recipientCount: 1,
-            sentAt: nowIso,
-            sentBy: 'Admin System',
-            status: 'sent',
-            target_manager_id: user?.user_id
-          });
-        });
-      }
-
-      setReports(next);
-    };
-
-    // seed notified list for already-handled items
-    normalize(mockAdminReports as any).forEach((r) => {
-      if (r.status === 'admin_handled') notifiedHandledIdsRef.current.add(r.report_id);
-    });
-
-    load();
-    const interval = setInterval(load, 5000);
+    loadData();
+    const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
 
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const response = await managerService.getManagerHistory();
+      
+      if (response.success && response.data) {
+        const reportsData = Array.isArray(response.data) ? response.data : (response.data.reports || []);
+        const next = normalize(reportsData);
+        setReports(next);
+      }
+    } catch (error: any) {
+      console.error('Error loading report history:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredReports = useMemo(() => {
-    const managedStationIds: number[] = user?.managed_stations || [];
-    return reports
-      .filter((r) => managedStationIds.includes(r.station_id))
-      .sort((a, b) => new Date(b.reported_at).getTime() - new Date(a.reported_at).getTime());
-  }, [reports, user?.managed_stations]);
+    // Backend đã filter theo manager, chỉ cần sort
+    return reports.sort((a, b) => new Date(b.reported_at).getTime() - new Date(a.reported_at).getTime());
+  }, [reports]);
 
   return (
     <div className="manager-report-history-page">
@@ -132,7 +107,13 @@ const ReportHistory = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredReports.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>
+                    <Loader2 size={32} className="animate-spin" style={{ color: '#3b82f6', margin: '0 auto' }} />
+                  </td>
+                </tr>
+              ) : filteredReports.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="empty-cell">
                     Không có báo cáo nào

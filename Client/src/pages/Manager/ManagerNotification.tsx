@@ -1,64 +1,103 @@
 import { useEffect, useState } from 'react';
-import { Bell, Clock, CheckCircle, Trash2, RefreshCw } from 'lucide-react';
+import { Bell, Clock, CheckCircle, Trash2, RefreshCw, Loader2 } from 'lucide-react';
 import { authService } from '../../services/authService';
-import { mockManagerNotifications } from '../../services/mockData';
+import { managerService } from '../../services/managerService';
 import './ManagerNotifications.css';
 
 const ManagerNotifications = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [filter, setFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
   const user = authService.getCurrentUser();
 
   useEffect(() => {
     loadNotifications();
-
+    // Tăng interval lên 10 giây để tránh reload quá nhanh
     const interval = setInterval(() => {
       loadNotifications();
-    }, 5000);
+    }, 10000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [filter]);
 
-  const loadNotifications = () => {
-    const managerId = user?.user_id;
+  const loadNotifications = async () => {
+    try {
+      setLoading(true);
+      const params: any = {};
+      if (filter === 'unread') {
+        params.is_read = false;
+      } else if (filter === 'system') {
+        params.type = 'system';
+      }
 
-    const list = (mockManagerNotifications as any[])
-      .filter((notif: any) => {
-        if (notif.recipients === 'all') return true;
-        if (notif.recipients === 'specific') {
-          return managerId != null && notif.target_manager_id === managerId;
-        }
-        return true;
-      })
-      .map((notif: any) => {
-        const existing = notifications.find(n => n.notification_id === notif.notification_id);
-        return {
-          ...notif,
-          isRead: existing ? existing.isRead : false,
-          receivedAt: notif.sentAt
-        };
-      })
-      .sort((a: any, b: any) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+      const response = await managerService.getNotifications(params);
+      
+      if (response.success && response.data) {
+        const notificationsData = Array.isArray(response.data) ? response.data : (response.data.notifications || []);
+        // Giữ lại trạng thái isRead của các notification đã được đánh dấu
+        const list = notificationsData
+          .map((notif: any) => {
+            const existing = notifications.find(n => (n.notification_id || n.id) === (notif.notification_id || notif.id));
+            // Backend trả về status: 'unread' hoặc 'read'
+            const isRead = existing ? existing.isRead : (notif.status === 'read' || notif.is_read || notif.isRead || false);
+            return {
+              ...notif,
+              notification_id: notif.notification_id || notif.id,
+              isRead: isRead,
+              receivedAt: notif.sent_at || notif.sentAt || notif.created_at,
+              title: notif.title || 'Thông báo',
+              message: notif.message || notif.content || '',
+              type: notif.type || 'system'
+            };
+          })
+          .sort((a: any, b: any) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
 
-    setNotifications(list);
+        setNotifications(list);
+      }
+    } catch (error: any) {
+      console.error('Error loading notifications:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleMarkAsRead = (notificationId: number) => {
-    setNotifications(prev =>
-      prev.map(notif =>
-        notif.notification_id === notificationId
-          ? { ...notif, isRead: true }
-          : notif
-      )
-    );
+  const handleMarkAsRead = async (notificationId: number) => {
+    try {
+      await managerService.markNotificationAsRead(notificationId);
+      setNotifications(prev =>
+        prev.map(notif =>
+          notif.notification_id === notificationId
+            ? { ...notif, isRead: true }
+            : notif
+        )
+      );
+      // Trigger update badge count in layout
+      window.dispatchEvent(new Event('notification-updated'));
+    } catch (error: any) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(notif => ({ ...notif, isRead: true })));
+  const handleMarkAllAsRead = async () => {
+    try {
+      await managerService.markAllNotificationsAsRead();
+      setNotifications(prev => prev.map(notif => ({ ...notif, isRead: true })));
+      // Trigger update badge count in layout
+      window.dispatchEvent(new Event('notification-updated'));
+    } catch (error: any) {
+      console.error('Error marking all as read:', error);
+    }
   };
 
-  const handleDelete = (notificationId: number) => {
-    setNotifications(prev => prev.filter(notif => notif.notification_id !== notificationId));
+  const handleDelete = async (notificationId: number) => {
+    try {
+      await managerService.deleteNotification(notificationId);
+      setNotifications(prev => prev.filter(notif => notif.notification_id !== notificationId));
+      // Trigger update badge count in layout
+      window.dispatchEvent(new Event('notification-updated'));
+    } catch (error: any) {
+      console.error('Error deleting notification:', error);
+    }
   };
 
   const filteredNotifications = notifications.filter(notif => {
@@ -133,7 +172,11 @@ const ManagerNotifications = () => {
       </div>
 
       <div className="notifications-list">
-        {filteredNotifications.length === 0 ? (
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4rem' }}>
+            <Loader2 size={48} className="animate-spin" style={{ color: '#3b82f6' }} />
+          </div>
+        ) : filteredNotifications.length === 0 ? (
           <div className="empty-notifications">
             <Bell size={64} />
             <h3>Không có thông báo</h3>

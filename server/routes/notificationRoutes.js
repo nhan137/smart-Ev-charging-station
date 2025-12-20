@@ -21,5 +21,8 @@ router.put('/:notification_id/read', authenticate, userNotificationController.ma
 // PUT /api/notifications/mark-all-read - Mark all notifications as read
 router.put('/mark-all-read', authenticate, userNotificationController.markAllAsRead);
 
+// DELETE /api/notifications/:notification_id - Delete notification
+router.delete('/:notification_id', authenticate, userNotificationController.deleteNotification);
+
 module.exports = router;
 

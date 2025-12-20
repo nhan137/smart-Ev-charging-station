@@ -96,6 +96,142 @@ export const managerService = {
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Không thể tải lịch sử đặt lịch');
     }
+  },
+
+  // ========== Dashboard API ==========
+  getDashboardOverview: async () => {
+    try {
+      const response = await api.get('/manager/dashboard');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải thông tin dashboard');
+    }
+  },
+
+  // ========== Report APIs ==========
+  // Create report (Manager gửi báo cáo sự cố lên Admin)
+  createReport: async (data: {
+    station_id: number;
+    title: string;
+    description: string;
+    images?: File[];
+  }) => {
+    try {
+      const formData = new FormData();
+      formData.append('station_id', data.station_id.toString());
+      formData.append('title', data.title);
+      formData.append('description', data.description);
+      
+      if (data.images && data.images.length > 0) {
+        data.images.forEach((image) => {
+          formData.append('images', image);
+        });
+      }
+
+      const response = await api.post('/reports', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể gửi báo cáo');
+    }
+  },
+
+  // Get manager inbox (báo cáo từ User)
+  getManagerInbox: async (filters?: {
+    station_id?: number;
+    status?: string;
+  }) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.station_id) params.append('station_id', filters.station_id.toString());
+      if (filters?.status) params.append('status', filters.status);
+      
+      const response = await api.get(`/reports/manager/inbox?${params.toString()}`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải hộp thư báo cáo');
+    }
+  },
+
+  // Get manager report history (báo cáo đã gửi lên Admin)
+  getManagerHistory: async () => {
+    try {
+      const response = await api.get('/reports/manager/history');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải lịch sử báo cáo');
+    }
+  },
+
+  // Resolve report (Manager xử lý xong báo cáo từ User)
+  resolveReport: async (reportId: number) => {
+    try {
+      const response = await api.put(`/reports/${reportId}/manager/resolve`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể xử lý báo cáo');
+    }
+  },
+
+  // Escalate report (Manager chuyển báo cáo lên Admin)
+  escalateReport: async (reportId: number) => {
+    try {
+      const response = await api.put(`/reports/${reportId}/manager/escalate`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể chuyển báo cáo lên Admin');
+    }
+  },
+
+  // ========== Notification APIs ==========
+  // Get notifications
+  getNotifications: async (filters?: {
+    type?: string;
+    is_read?: boolean;
+  }) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.type) params.append('type', filters.type);
+      if (filters?.is_read !== undefined) params.append('is_read', filters.is_read.toString());
+      
+      const response = await api.get(`/notifications?${params.toString()}`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể tải thông báo');
+    }
+  },
+
+  // Mark notification as read
+  markNotificationAsRead: async (notificationId: number) => {
+    try {
+      const response = await api.put(`/notifications/${notificationId}/read`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể đánh dấu đã đọc');
+    }
+  },
+
+  // Mark all notifications as read
+  markAllNotificationsAsRead: async () => {
+    try {
+      const response = await api.put('/notifications/mark-all-read');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể đánh dấu tất cả đã đọc');
+    }
+  },
+
+  // Delete notification
+  deleteNotification: async (notificationId: number) => {
+    try {
+      const response = await api.delete(`/notifications/${notificationId}`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Không thể xóa thông báo');
+    }
   }
 };
 

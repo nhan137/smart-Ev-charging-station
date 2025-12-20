@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { FileText, AlertTriangle, Send } from 'lucide-react';
+import { FileText, AlertTriangle, Send, Loader2 } from 'lucide-react';
 import { authService } from '../../services/authService';
-import { mockStations } from '../../services/mockData';
+import { managerService } from '../../services/managerService';
 import AlertModal from '../../components/shared/AlertModal';
 import './Reports.css';
 
@@ -23,16 +23,26 @@ const Reports = () => {
     loadStations();
   }, []);
 
-  const loadStations = () => {
-    const managedStationIds = user?.managed_stations || [];
-    const managedStations = mockStations.filter(s => 
-      managedStationIds.includes(s.station_id)
-    );
-    setStations(managedStations);
-    
-    // Auto select first station
-    if (managedStations.length > 0) {
-      setSelectedStation(managedStations[0].station_id.toString());
+  const loadStations = async () => {
+    try {
+      const response = await managerService.getManagerStations();
+      if (response.success && response.data) {
+        const stationsData = Array.isArray(response.data) ? response.data : (response.data.stations || []);
+        setStations(stationsData);
+        
+        // Auto select first station
+        if (stationsData.length > 0) {
+          setSelectedStation(stationsData[0].station_id.toString());
+        }
+      }
+    } catch (error: any) {
+      console.error('Error loading stations:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải danh sách trạm',
+        type: 'error'
+      });
     }
   };
 
@@ -51,12 +61,11 @@ const Reports = () => {
 
     setLoading(true);
     try {
-      // TODO: Call API
-      // await reportService.create({
-      //   station_id: Number(selectedStation),
-      //   title,
-      //   description
-      // });
+      await managerService.createReport({
+        station_id: Number(selectedStation),
+        title: title.trim(),
+        description: description.trim()
+      });
 
       setAlertModal({
         show: true,

@@ -71,6 +71,25 @@
   color: #ef4444;
 }
 
+.notification-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: #ef4444;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 2px solid #f59e0b;
+  min-width: 20px;
+  padding: 0 4px;
+}
+
 /* Main Content */
 .manager-main {
   flex: 1;

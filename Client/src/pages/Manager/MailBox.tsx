@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle, Filter, Mail } from 'lucide-react';
+import { CheckCircle, Filter, Mail, Loader2 } from 'lucide-react';
 import { authService } from '../../services/authService';
-import { getNextId, mockNotifications, mockReports, mockStations } from '../../services/mockData';
+import { managerService } from '../../services/managerService';
 import AlertModal from '../../components/shared/AlertModal';
 import './MailBox.css';
 
@@ -58,9 +58,9 @@ const normalizeManagerReports = (input: any[]): ManagerReportItem[] => {
 
     return {
       report_id: r.report_id || r.id || `REP-${Date.now()}`,
-      user_id: r.user_id ?? 1,
-      user_name: r.user_name || r.userName || 'Người dùng',
-      station_id: Number(r.station_id ?? r.stationId ?? 0),
+      user_id: (r.user_id || r.reporter_id) ?? 1,
+      user_name: r.user_name || r.reporter_name || r.userName || 'Người dùng',
+      station_id: Number((r.station_id ?? r.stationId) ?? 0),
       station_name: r.station_name || r.stationName || 'Không rõ',
       title: r.title || '',
       description: r.description || '',
@@ -77,6 +77,7 @@ const MailBox = () => {
   const [stations, setStations] = useState<any[]>([]);
   const [selectedStation, setSelectedStation] = useState<string>('all');
   const [reports, setReports] = useState<ManagerReportItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
     show: false,
@@ -86,64 +87,81 @@ const MailBox = () => {
   });
 
   useEffect(() => {
-    const managedStationIds: number[] = user?.managed_stations || [];
-    const managedStations = mockStations.filter((s) => managedStationIds.includes(s.station_id));
-    setStations(managedStations);
-const normalized = normalizeManagerReports(mockReports);
-    setReports(normalized);
-  }, []);
+    loadData();
+  }, [selectedStation]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load stations
+      const stationsResponse = await managerService.getManagerStations();
+      if (stationsResponse.success && stationsResponse.data) {
+        const stationsData = Array.isArray(stationsResponse.data) ? stationsResponse.data : (stationsResponse.data.stations || []);
+        setStations(stationsData);
+      }
+
+      // Load reports - chỉ lấy báo cáo từ User có status = 'pending' (chờ Manager xử lý)
+      // Lưu ý: ReportHistory hiển thị báo cáo do Manager gửi lên Admin (khác với MailBox)
+      const reportsResponse = await managerService.getManagerInbox({
+        station_id: selectedStation !== 'all' ? Number(selectedStation) : undefined,
+        status: 'pending' // Chỉ lấy báo cáo chưa xử lý từ User
+      });
+      
+      if (reportsResponse.success && reportsResponse.data) {
+        const reportsData = Array.isArray(reportsResponse.data) ? reportsResponse.data : (reportsResponse.data.reports || []);
+        console.log('[MailBox] Loaded reports:', reportsData.length);
+        const normalized = normalizeManagerReports(reportsData);
+        setReports(normalized);
+      }
+    } catch (error: any) {
+      console.error('Error loading data:', error);
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể tải dữ liệu',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredReports = useMemo(() => {
-    const managedStationIds: number[] = user?.managed_stations || [];
-
+    // Backend đã filter theo manager, chỉ cần filter theo selectedStation
     return reports
-      .filter((r) => managedStationIds.includes(r.station_id))
       .filter((r) => {
         if (selectedStation === 'all') return true;
         return r.station_id.toString() === selectedStation;
       })
       .sort((a, b) => new Date(b.reported_at).getTime() - new Date(a.reported_at).getTime());
-  }, [reports, selectedStation, user?.managed_stations]);
+  }, [reports, selectedStation]);
 
-  const markResolved = (reportId: string) => {
-    const nowIso = new Date().toISOString();
+  const markResolved = async (reportId: string) => {
+    try {
+      await managerService.resolveReport(Number(reportId));
+      
+      setReports((prev) =>
+        prev.map((r) => (r.report_id === reportId ? { ...r, status: 'resolved', last_update_at: new Date().toISOString() } : r))
+      );
 
-    setReports((prev) =>
-      prev.map((r) => (r.report_id === reportId ? { ...r, status: 'resolved', last_update_at: nowIso } : r))
-    );
-
-    const idx = mockReports.findIndex((r: any) => (r.report_id || r.id) === reportId);
-    if (idx >= 0) {
-      (mockReports as any)[idx] = {
-        ...(mockReports as any)[idx],
-        status: 'resolved',
-        last_update_at: nowIso
-      };
-    }
-
-    const current = reports.find((r) => r.report_id === reportId);
-    if (current) {
-      const notificationId = getNextId(mockNotifications as any, 'notification_id');
-      (mockNotifications as any).push({
-        notification_id: notificationId,
-        title: 'Báo cáo sự cố đã được xử lý',
-        message: `Báo cáo ${current.report_id} tại ${current.station_name} đã được Manager xử lý.`,
-        type: 'system',
-        recipients: 'specific',
-        recipientCount: 1,
-        sentAt: nowIso,
-        sentBy: user?.full_name || 'Manager',
-        status: 'sent',
-        target_user_id: current.user_id
+      setAlertModal({
+        show: true,
+        title: 'Thành công',
+        message: 'Đã cập nhật trạng thái báo cáo sang resolved',
+        type: 'success'
+      });
+      
+      // Reload data
+      loadData();
+    } catch (error: any) {
+      setAlertModal({
+        show: true,
+        title: 'Lỗi',
+        message: error.message || 'Không thể xử lý báo cáo',
+        type: 'error'
       });
     }
-
-    setAlertModal({
-      show: true,
-      title: 'Thành công',
-      message: 'Đã cập nhật trạng thái báo cáo sang resolved và gửi thông báo cho user (mock).',
-      type: 'success'
-    });
   };
 
   return (
@@ -190,7 +208,13 @@ const normalized = normalizeManagerReports(mockReports);
               </tr>
             </thead>
             <tbody>
-              {filteredReports.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '2rem' }}>
+                    <Loader2 size={32} className="animate-spin" style={{ color: '#3b82f6', margin: '0 auto' }} />
+                  </td>
+                </tr>
+              ) : filteredReports.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="mailbox-empty">
                     Không có báo cáo nào

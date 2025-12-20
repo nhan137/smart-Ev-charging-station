@@ -25,24 +25,21 @@ exports.getDashboardOverview = async (req, res, next) => {
     }
 
     // 2. Stations stats
-    const [stationStats] = await Promise.all([
-      Station.findAll({
-        where: { manager_id: managerId },
-        attributes: [
-          [fn('COUNT', col('station_id')), 'total_stations'],
-          [
-            fn('SUM', literal("CASE WHEN status = 'active' THEN 1 ELSE 0 END")),
-            'active_stations'
-          ]
-        ],
-        raw: true
-      })
-    ]);
+    const stationCount = await Station.count({
+      where: { manager_id: managerId }
+    });
+    
+    const activeStationCount = await Station.count({
+      where: { 
+        manager_id: managerId,
+        status: 'active'
+      }
+    });
 
-    const totalStations = parseInt(stationStats?.total_stations || 0, 10) || 0;
-    const activeStations = parseInt(stationStats?.active_stations || 0, 10) || 0;
+    const totalStations = stationCount || 0;
+    const activeStations = activeStationCount || 0;
 
-    // If manager has no stations, short-circuit other stats
+    // If manager has no stations, return empty data with stations array
     if (totalStations === 0) {
       return res.json({
         success: true,
@@ -54,6 +51,7 @@ exports.getDashboardOverview = async (req, res, next) => {
             today_bookings: 0,
             today_revenue: 0
           },
+          stations: [], // Thêm stations array rỗng để frontend không bị lỗi
           recent_bookings: [],
           capacity: {
             total_slots: 0,

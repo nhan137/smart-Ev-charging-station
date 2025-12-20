@@ -1,47 +1,73 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Calendar, DollarSign, Zap, TrendingUp, Users, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Building2, Calendar, DollarSign, Zap, TrendingUp, Users, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 import { authService } from '../../services/authService';
-import { mockStations } from '../../services/mockData';
+import { managerService } from '../../services/managerService';
 import './Dashboard.css';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
   const [stations, setStations] = useState<any[]>([]);
+  const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalStations: 0,
     activeStations: 0,
     totalBookings: 0,
     todayRevenue: 0,
     totalSlots: 0,
-    availableSlots: 0
+    availableSlots: 0,
+    usedSlots: 0,
+    capacityPercent: 0
   });
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const managedStationIds = user?.managed_stations || [];
-    const managedStations = mockStations.filter(s => 
-      managedStationIds.includes(s.station_id)
-    );
-    setStations(managedStations);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const response = await managerService.getDashboardOverview();
+      console.log('[Dashboard] API Response:', response);
+      
+      if (response.success && response.data) {
+        const data = response.data;
+        console.log('[Dashboard] Data:', data);
+        
+        // Update stats
+        setStats({
+          totalStations: data.stats?.total_stations || 0,
+          activeStations: data.stats?.active_stations || 0,
+          totalBookings: data.stats?.today_bookings || 0,
+          todayRevenue: data.stats?.today_revenue || 0,
+          totalSlots: data.capacity?.total_slots || 0,
+          availableSlots: (data.capacity?.total_slots || 0) - (data.capacity?.used_slots || 0),
+          usedSlots: data.capacity?.used_slots || 0,
+          capacityPercent: data.capacity?.percent || 0
+        });
 
-    // Calculate stats
-    const totalSlots = managedStations.reduce((sum, s) => sum + s.total_slots, 0);
-    const availableSlots = managedStations.reduce((sum, s) => sum + s.available_slots, 0);
-    const activeStations = managedStations.filter(s => s.status === 'active').length;
+        // Update stations
+        setStations(data.stations || []);
 
-    setStats({
-      totalStations: managedStations.length,
-      activeStations,
-      totalBookings: 24, // Mock data
-      todayRevenue: 2450000, // Mock data
-      totalSlots,
-      availableSlots
-    });
+        // Update recent bookings
+        const formattedBookings = (data.recent_bookings || []).map((booking: any) => ({
+          id: booking.id || booking.booking_id,
+          customer: booking.customer_name || 'Không rõ',
+          station: booking.station_name || 'Không rõ',
+          time: booking.start_time ? new Date(booking.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+          status: booking.status || 'pending'
+        }));
+        setRecentBookings(formattedBookings);
+      } else {
+        console.error('[Dashboard] Response not successful:', response);
+      }
+    } catch (error: any) {
+      console.error('Error loading dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const statCards = [
@@ -77,11 +103,6 @@ const Dashboard = () => {
 
 
 
-  const recentBookings = [
-    { id: 1, customer: 'Nguyễn Văn A', station: 'Trạm sạc Hải Châu', time: '14:00', status: 'confirmed' },
-    { id: 2, customer: 'Trần Thị B', station: 'Trạm sạc Sơn Trà', time: '15:30', status: 'pending' },
-    { id: 3, customer: 'Lê Văn C', station: 'Trạm sạc Hải Châu', time: '16:00', status: 'completed' }
-  ];
 
   const getStatusBadge = (status: string) => {
     const config: any = {
@@ -92,6 +113,14 @@ const Dashboard = () => {
     const { label, class: className } = config[status] || { label: status, class: '' };
     return <span className={`status-badge ${className}`}>{label}</span>;
   };
+
+  if (loading) {
+    return (
+      <div className="dashboard" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <Loader2 size={48} className="animate-spin" style={{ color: '#3b82f6' }} />
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard">
@@ -139,26 +168,30 @@ const Dashboard = () => {
             </button>
           </div>
           <div className="stations-list-dashboard">
-            {stations.map((station) => (
-              <div key={station.station_id} className="station-item-dashboard">
-                <div className="station-info-dashboard">
-                  <Building2 size={20} />
-                  <div>
-                    <h3>{station.station_name}</h3>
-                    <p>{station.available_slots}/{station.total_slots} chỗ trống</p>
+            {stations.length > 0 ? (
+              stations.map((station) => (
+                <div key={station.station_id} className="station-item-dashboard">
+                  <div className="station-info-dashboard">
+                    <Building2 size={20} />
+                    <div>
+                      <h3>{station.station_name}</h3>
+                      <p>{station.available_slots}/{station.total_slots} chỗ trống</p>
+                    </div>
+                  </div>
+                  <div className="station-actions-dashboard">
+                    <button
+                      className="icon-btn"
+                      onClick={() => navigate(`/manager/stations/${station.station_id}/bookings`)}
+                      title="Xem booking"
+                    >
+                      <Calendar size={18} />
+                    </button>
                   </div>
                 </div>
-                <div className="station-actions-dashboard">
-                  <button
-                    className="icon-btn"
-                    onClick={() => navigate(`/manager/stations/${station.station_id}/bookings`)}
-                    title="Xem booking"
-                  >
-                    <Calendar size={18} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>Chưa có trạm sạc nào</p>
+            )}
           </div>
         </div>
 
@@ -168,20 +201,24 @@ const Dashboard = () => {
             <h2>Booking gần đây</h2>
           </div>
           <div className="bookings-list-dashboard">
-            {recentBookings.map((booking) => (
-              <div key={booking.id} className="booking-item-dashboard">
-                <div className="booking-info-dashboard">
-                  <div className="booking-avatar">
-                    <Users size={18} />
+            {recentBookings.length > 0 ? (
+              recentBookings.map((booking) => (
+                <div key={booking.id} className="booking-item-dashboard">
+                  <div className="booking-info-dashboard">
+                    <div className="booking-avatar">
+                      <Users size={18} />
+                    </div>
+                    <div>
+                      <h4>{booking.customer}</h4>
+                      <p>{booking.station} • {booking.time}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4>{booking.customer}</h4>
-                    <p>{booking.station} • {booking.time}</p>
-                  </div>
+                  {getStatusBadge(booking.status)}
                 </div>
-                {getStatusBadge(booking.status)}
-              </div>
-            ))}
+              ))
+            ) : (
+              <p style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>Chưa có booking nào</p>
+            )}
           </div>
         </div>
       </div>
@@ -195,7 +232,7 @@ const Dashboard = () => {
           <div className="capacity-bar">
             <div 
               className="capacity-fill"
-              style={{ width: `${((stats.totalSlots - stats.availableSlots) / stats.totalSlots * 100)}%` }}
+              style={{ width: `${stats.capacityPercent || 0}%` }}
             />
           </div>
           <div className="capacity-stats">
@@ -203,11 +240,11 @@ const Dashboard = () => {
               <Zap size={20} />
               <div>
                 <span className="capacity-label">Đang sử dụng</span>
-                <span className="capacity-value">{stats.totalSlots - stats.availableSlots}/{stats.totalSlots} chỗ</span>
+                <span className="capacity-value">{stats.usedSlots}/{stats.totalSlots} chỗ</span>
               </div>
             </div>
             <div className="capacity-percentage">
-              {Math.round((stats.totalSlots - stats.availableSlots) / stats.totalSlots * 100)}%
+              {stats.totalSlots > 0 ? `${stats.capacityPercent.toFixed(0)}%` : '0%'}
             </div>
           </div>
         </div>

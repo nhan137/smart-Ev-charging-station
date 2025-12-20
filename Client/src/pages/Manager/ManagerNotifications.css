@@ -83,8 +83,9 @@
 .notifications-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
   width: 100%;
+  padding: 0.5rem 0;
 }
 
 .notification-card {
@@ -92,10 +93,11 @@
   grid-template-columns: 16px 56px minmax(0, 1fr) 40px;
   gap: 1rem;
   align-items: start;
-  padding: 1rem;
+  padding: 1.25rem;
   background: white;
   border-radius: 16px;
   border: 2px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: all 0.15s ease;
   width: 100%;
@@ -179,12 +181,25 @@
 
 .btn-mark-read {
   margin-top: 0.65rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 1rem;
   border-radius: 10px;
-  border: 2px solid #e2e8f0;
-background: white;
+  border: 2px solid #3b82f6;
+  background: white;
+  color: #3b82f6;
   font-weight: 800;
+  font-size: 0.875rem;
   cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-mark-read:hover {
+  background: #3b82f6;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .btn-delete-notification {

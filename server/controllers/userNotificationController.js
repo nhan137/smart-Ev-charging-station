@@ -197,3 +197,41 @@ exports.markAllAsRead = async (req, res, next) => {
   }
 };
 
+/**
+ * Delete notification
+ * DELETE /api/notifications/:notification_id
+ */
+exports.deleteNotification = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+    const { notification_id } = req.params;
+
+    const notification = await Notification.findByPk(notification_id);
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    // Check if notification belongs to user or is system-wide
+    if (notification.user_id !== null && notification.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to delete this notification'
+      });
+    }
+
+    // Delete notification
+    await notification.destroy();
+
+    res.status(200).json({
+      success: true,
+      message: 'Notification deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
