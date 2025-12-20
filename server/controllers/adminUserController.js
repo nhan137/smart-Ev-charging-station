@@ -1,206 +1,521 @@
-const { User, Role, Booking, Payment } = require('../models');
+const User = require('../models/User');
+const Role = require('../models/Role');
+const Booking = require('../models/Booking');
+const Payment = require('../models/Payment');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 
-// --- CONSTANTS & TRANSFORMERS ---
-const MAPS = {
-  ROLES: { 1: 'User', 2: 'Manager', 3: 'Admin' },
-  STATUS: {
-    active: { label: 'Hoạt động', color: 'green' },
-    locked: { label: 'Đã khóa', color: 'red' }
+/**
+ * Get user statistics
+ * GET /api/admin/users/stats
+ */
+exports.getUserStats = async (req, res, next) => {
+  try {
+    const total = await User.count();
+    const active = await User.count({ where: { status: 'active' } });
+    const locked = await User.count({ where: { status: 'locked' } });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        total,
+        active,
+        locked
+      }
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
 /**
- * Hàm biến đổi dữ liệu User trả về cho Frontend (Hình 1 & 8)
+ * Get all users with filters
+ * GET /api/admin/users
  */
-const transformUser = (user) => {
-  const data = user instanceof Object ? (user.toJSON ? user.toJSON() : user) : user;
-  const roleInfo = MAPS.ROLES[data.role_id] || 'Unknown';
-  const statusInfo = MAPS.STATUS[data.status] || { label: data.status, color: 'gray' };
+exports.getUsers = async (req, res, next) => {
+  try {
+    const { role_id, status, search, page = 1, limit = 10 } = req.query;
+    
+    // Build WHERE clause
+    const where = {};
+    
+    if (role_id) {
+      where.role_id = parseInt(role_id);
+    }
+    
+    if (status) {
+      where.status = status;
+    }
+    
+    if (search) {
+      where[Op.or] = [
+        { full_name: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+        { phone: { [Op.like]: `%${search}%` } }
+      ];
+    }
 
-  return {
-    id: data.user_id,
-    key: `#${data.user_id}`,
-    fullName: data.full_name,
-    email: data.email,
-    phone: data.phone || 'N/A',
-    role: {
-      id: data.role_id,
-      name: roleInfo,
-      badge: roleInfo // Dùng cho UI hiển thị
-    },
-    status: {
-      code: data.status,
-      label: statusInfo.label,
-      color: statusInfo.color
-    },
-    createdAt: data.created_at,
-    createdDate: new Date(data.created_at).toLocaleDateString('vi-VN')
-  };
-};
+    // Calculate pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-// --- CONTROLLER OBJECT ---
-const AdminUserController = {
-  /**
-   * Lấy thống kê nhanh
-   */
-  getUserStats: async (req, res, next) => {
-    try {
-      const stats = await User.findAll({
-        attributes: [
-          'status',
-          [User.sequelize.fn('COUNT', User.sequelize.col('user_id')), 'count']
-        ],
-        group: ['status'],
-        raw: true
+    // Get users with role
+    const { count, rows: users } = await User.findAndCountAll({
+      where,
+      include: [{
+        model: Role,
+        as: 'role',
+        attributes: ['role_id', 'role_name']
+      }],
+      attributes: { exclude: ['password'] },
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit),
+      offset: offset
+    });
+
+    // Format response để khớp với UI (Hình 1)
+    const roleMap = {
+      1: { name: 'User', label: 'User' },
+      2: { name: 'Manager', label: 'Manager' },
+      3: { name: 'Admin', label: 'Admin' }
+    };
+
+    const statusMap = {
+      'active': { label: 'Hoạt động', color: 'green' },
+      'locked': { label: 'Đã khóa', color: 'red' }
+    };
+
+    const formattedUsers = users.map(user => {
+      const userData = user.toJSON();
+      const role = roleMap[userData.role_id] || { name: 'Unknown', label: 'Unknown' };
+      const status = statusMap[userData.status] || { label: userData.status, color: 'gray' };
+
+      // Format ngày tạo
+      const createdDate = new Date(userData.created_at);
+      const createdDateStr = createdDate.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
       });
 
-      const result = {
-        total: stats.reduce((acc, curr) => acc + parseInt(curr.count), 0),
-        active: parseInt(stats.find(s => s.status === 'active')?.count || 0),
-        locked: parseInt(stats.find(s => s.status === 'locked')?.count || 0)
+      return {
+        user_id: userData.user_id,
+        user_code: `#${userData.user_id}`, // ID: #1, #2
+        full_name: userData.full_name, // Họ tên
+        email: userData.email, // Email
+        phone: userData.phone || 'N/A', // SĐT
+        role_id: userData.role_id,
+        role_name: role.name, // Vai trò: User, Manager, Admin
+        role_label: role.label, // Để hiển thị badge
+        status: userData.status,
+        status_label: status.label, // Trạng thái: Hoạt động, Đã khóa
+        status_color: status.color, // Để hiển thị màu badge
+        created_at: userData.created_at,
+        created_date: createdDateStr, // Ngày tạo: 15/1/2025
+        role: userData.role // Giữ nguyên để tương thích
       };
+    });
 
-      res.json({ success: true, data: result });
-    } catch (e) { next(e); }
-  },
-
-  /**
-   * Danh sách người dùng + Filter + Search
-   */
-  getUsers: async (req, res, next) => {
-    try {
-      const { role_id, status, search, page = 1, limit = 10 } = req.query;
-      
-      const filter = {
-        ...(role_id && { role_id: +role_id }),
-        ...(status && { status }),
-        ...(search && {
-          [Op.or]: [
-            { full_name: { [Op.like]: `%${search}%` } },
-            { email: { [Op.like]: `%${search}%` } },
-            { phone: { [Op.like]: `%${search}%` } }
-          ]
-        })
-      };
-
-      const { count, rows } = await User.findAndCountAll({
-        where: filter,
-        include: [{ model: Role, as: 'role', attributes: ['role_name'] }],
-        attributes: { exclude: ['password'] },
-        order: [['created_at', 'DESC']],
-        limit: +limit,
-        offset: (page - 1) * limit
-      });
-
-      res.json({
-        success: true,
-        data: {
-          users: rows.map(transformUser),
-          pagination: { total: count, page: +page, totalPages: Math.ceil(count / limit) }
+    res.status(200).json({
+      success: true,
+      data: {
+        users: formattedUsers,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(count / parseInt(limit))
         }
-      });
-    } catch (e) { next(e); }
-  },
-
-  /**
-   * Tạo người dùng mới
-   */
-  createUser: async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
-
-      const { full_name, email, password, phone, role_id } = req.body;
-
-      // Check trùng lặp bằng Op.or để tối ưu 1 lần query
-      const existing = await User.findOne({ 
-        where: { [Op.or]: [{ email }, ...(phone ? [{ phone }] : [])] } 
-      });
-      
-      if (existing) {
-        return res.status(400).json({ 
-          success: false, 
-          message: existing.email === email ? 'Email already exists' : 'Phone already exists' 
-        });
       }
-
-      const user = await User.create({
-        full_name, email, password, phone: phone || null,
-        role_id: role_id || 1,
-        status: 'active'
-      });
-
-      res.status(201).json({ success: true, data: transformUser(user) });
-    } catch (e) { next(e); }
-  },
-
-  /**
-   * Cập nhật thông tin
-   */
-  updateUser: async (req, res, next) => {
-    try {
-      const { user_id } = req.params;
-      const { full_name, email, phone, role_id } = req.body;
-
-      if (+role_id === 3) throw new Error('Cannot manually assign Admin role');
-
-      const user = await User.findByPk(user_id);
-      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-      // Cập nhật thông tin
-      await user.update({
-        full_name,
-        email,
-        role_id,
-        phone: phone || null
-      });
-
-      res.json({ success: true, data: transformUser(user) });
-    } catch (e) { next(e); }
-  },
-
-  /**
-   * Khóa / Mở khóa
-   */
-  updateUserStatus: async (req, res, next) => {
-    try {
-      const { user_id } = req.params;
-      const { status } = req.body;
-
-      const user = await User.findByPk(user_id);
-      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-      await user.update({ status });
-      res.json({ success: true, message: `User status changed to ${status}` });
-    } catch (e) { next(e); }
-  },
-
-  /**
-   * Xóa người dùng (Soft check)
-   */
-  deleteUser: async (req, res, next) => {
-    try {
-      const { user_id } = req.params;
-
-      // Kiểm tra quan hệ dữ liệu trước khi xóa
-      const [bookings, payments] = await Promise.all([
-        Booking.count({ where: { user_id } }),
-        Payment.count({ where: { user_id } })
-      ]);
-
-      if (bookings > 0 || payments > 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Dữ liệu đang ràng buộc với giao dịch. Vui lòng chọn "Khóa tài khoản" thay vì xóa.'
-        });
-      }
-
-      await User.destroy({ where: { user_id } });
-      res.json({ success: true, message: 'Deleted successfully' });
-    } catch (e) { next(e); }
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
-module.exports = AdminUserController;
+/**
+ * Create new user
+ * POST /api/admin/users
+ */
+exports.createUser = async (req, res, next) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { full_name, email, password, phone, role_id } = req.body;
+
+    // Check if email already exists
+    const existingEmail = await User.findOne({ where: { email } });
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already exists'
+      });
+    }
+
+    // Check if phone already exists (if provided)
+    if (phone) {
+      const existingPhone = await User.findOne({ where: { phone } });
+      if (existingPhone) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number already exists'
+        });
+      }
+    }
+
+    // Create user (password will be hashed by beforeCreate hook)
+    const user = await User.create({
+      full_name,
+      email,
+      password,
+      phone: phone || null,
+      role_id: role_id || 1,
+      status: 'active'
+    });
+
+    // Get user with role (without password)
+    const userWithRole = await User.findByPk(user.user_id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        attributes: ['role_id', 'role_name']
+      }],
+      attributes: { exclude: ['password'] }
+    });
+
+    // Format response để khớp với UI
+    const userData = userWithRole.toJSON();
+    const roleMap = {
+      1: { name: 'User', label: 'User' },
+      2: { name: 'Manager', label: 'Manager' },
+      3: { name: 'Admin', label: 'Admin' }
+    };
+
+    const role = roleMap[userData.role_id] || { name: 'Unknown', label: 'Unknown' };
+    const createdDate = new Date(userData.created_at);
+    const createdDateStr = createdDate.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    const formattedUser = {
+      user_id: userData.user_id,
+      user_code: `#${userData.user_id}`,
+      full_name: userData.full_name,
+      email: userData.email,
+      phone: userData.phone || 'N/A',
+      role_id: userData.role_id,
+      role_name: role.name,
+      role_label: role.label,
+      status: userData.status,
+      status_label: userData.status === 'active' ? 'Hoạt động' : 'Đã khóa',
+      created_at: userData.created_at,
+      created_date: createdDateStr,
+      role: userData.role
+    };
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: formattedUser
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get user by ID
+ * GET /api/admin/users/:user_id
+ */
+exports.getUserById = async (req, res, next) => {
+  try {
+    const { user_id } = req.params;
+
+    const user = await User.findByPk(user_id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        attributes: ['role_id', 'role_name']
+      }],
+      attributes: { exclude: ['password'] }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Format response để khớp với UI (Hình 2 - Chi tiết người dùng)
+    const userData = user.toJSON();
+    const roleMap = {
+      1: 'User',
+      2: 'Manager',
+      3: 'Admin'
+    };
+
+    const formattedUser = {
+      user_id: userData.user_id,
+      user_code: `#${userData.user_id}`, // ID: #1
+      email: userData.email, // Email
+      full_name: userData.full_name, // Họ tên
+      phone: userData.phone || 'N/A', // Số điện thoại
+      role_id: userData.role_id,
+      role_name: roleMap[userData.role_id] || 'Unknown', // Vai trò: User, Manager, Admin
+      status: userData.status,
+      created_at: userData.created_at,
+      role: userData.role // Giữ nguyên để tương thích
+    };
+
+    res.status(200).json({
+      success: true,
+      data: formattedUser
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update user
+ * PUT /api/admin/users/:user_id
+ */
+exports.updateUser = async (req, res, next) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { user_id } = req.params;
+    const { full_name, email, phone, role_id } = req.body;
+
+    // Check if trying to assign Admin role (role_id = 3)
+    if (role_id === 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không thể phân quyền Admin. Chỉ có thể phân quyền User (1) hoặc Manager (2).'
+      });
+    }
+
+    // Find user
+    const user = await User.findByPk(user_id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if email duplicates another user (if email is being updated)
+    if (email && email !== user.email) {
+      const existingEmail = await User.findOne({
+        where: {
+          email,
+          user_id: { [Op.ne]: user_id }
+        }
+      });
+      if (existingEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists'
+        });
+      }
+    }
+
+    // Check if phone duplicates another user (if phone is being updated)
+    if (phone !== undefined && phone !== null && phone !== '' && phone !== user.phone) {
+      const existingPhone = await User.findOne({
+        where: {
+          phone,
+          user_id: { [Op.ne]: user_id }
+        }
+      });
+      if (existingPhone) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number already exists'
+        });
+      }
+    }
+
+    // Build update object
+    const updateData = {
+      full_name,
+      email,
+      role_id
+    };
+
+    // Only update phone if provided (allow null/empty to clear phone)
+    if (phone !== undefined) {
+      updateData.phone = phone || null;
+    }
+
+    // Update user
+    await user.update(updateData);
+
+    // Get updated user with role (without password)
+    const updatedUser = await User.findByPk(user_id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        attributes: ['role_id', 'role_name']
+      }],
+      attributes: { exclude: ['password'] }
+    });
+
+    // Format response để khớp với UI
+    const userData = updatedUser.toJSON();
+    const roleMap = {
+      1: { name: 'User', label: 'User' },
+      2: { name: 'Manager', label: 'Manager' },
+      3: { name: 'Admin', label: 'Admin' }
+    };
+
+    const role = roleMap[userData.role_id] || { name: 'Unknown', label: 'Unknown' };
+    const createdDate = new Date(userData.created_at);
+    const createdDateStr = createdDate.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    const formattedUser = {
+      user_id: userData.user_id,
+      user_code: `#${userData.user_id}`,
+      full_name: userData.full_name,
+      email: userData.email,
+      phone: userData.phone || 'N/A',
+      role_id: userData.role_id,
+      role_name: role.name,
+      role_label: role.label,
+      status: userData.status,
+      status_label: userData.status === 'active' ? 'Hoạt động' : 'Đã khóa',
+      created_at: userData.created_at,
+      created_date: createdDateStr,
+      role: userData.role
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'User updated successfully',
+      data: formattedUser
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update user status (lock/unlock)
+ * PUT /api/admin/users/:user_id/status
+ */
+exports.updateUserStatus = async (req, res, next) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { user_id } = req.params;
+    const { status } = req.body;
+
+    // Find user
+    const user = await User.findByPk(user_id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Update status
+    await user.update({ status });
+
+    // Get updated user with role (without password)
+    const updatedUser = await User.findByPk(user_id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        attributes: ['role_id', 'role_name']
+      }],
+      attributes: { exclude: ['password'] }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `User ${status === 'active' ? 'unlocked' : 'locked'} successfully`,
+      data: updatedUser
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete user
+ * DELETE /api/admin/users/:user_id
+ */
+exports.deleteUser = async (req, res, next) => {
+  try {
+    const { user_id } = req.params;
+
+    // Find user
+    const user = await User.findByPk(user_id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user has bookings
+    const bookingCount = await Booking.count({
+      where: { user_id }
+    });
+
+    // Check if user has payments
+    const paymentCount = await Payment.count({
+      where: { user_id }
+    });
+
+    // If user has related data, prevent deletion
+    if (bookingCount > 0 || paymentCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete user with existing transactions. Please Lock the user instead.'
+      });
+    }
+
+    // Delete user (database will auto-cascade delete favorites/notifications)
+    await user.destroy();
+
+    res.status(200).json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
