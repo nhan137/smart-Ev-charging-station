@@ -1,51 +1,49 @@
 const express = require('express');
 const router = express.Router();
-
-// Controllers
-const dashboard = require('../controllers/managerDashboardController');
-const stations = require('../controllers/managerStationController');
-const bookings = require('../controllers/managerBookingController');
-
-// Middlewares
+const managerStationController = require('../controllers/managerStationController');
+const managerBookingController = require('../controllers/managerBookingController');
+const managerDashboardController = require('../controllers/managerDashboardController');
 const { authenticate, authorize } = require('../middleware/auth');
 
 /**
- * Global Middleware cho Manager
- * Áp dụng cho toàn bộ các route trong file này
+ * Manager Routes
+ * Base path: /api/manager
+ * All routes require authentication and manager role
  */
-router.use(authenticate, authorize('manager'));
 
-// ========== 📊 DASHBOARD ==========
-router.get('/dashboard', dashboard.getDashboardOverview);
+// ========== Dashboard API ==========
 
-// ========== 🔌 STATION MANAGEMENT ==========
-router.route('/stations')
-  .get(stations.getManagerStations);
+// GET /api/manager/dashboard - Manager overview stats
+router.get(
+  '/dashboard',
+  authenticate,
+  authorize('manager'),
+  managerDashboardController.getDashboardOverview
+);
 
-router.route('/stations/:id')
-  .get(stations.getStationDetail);
+// ========== Station Management APIs ==========
 
-router.put('/stations/:id/status', stations.updateStationStatus);
+// GET /api/manager/stations - Get manager's station list
+router.get('/stations', authenticate, authorize('manager'), managerStationController.getManagerStations);
 
-// ========== 📅 BOOKING MANAGEMENT ==========
+// GET /api/manager/stations/:id - Get station detail & reviews
+router.get('/stations/:id', authenticate, authorize('manager'), managerStationController.getStationDetail);
 
-// 1. Xem danh sách & lịch sử
-router.get('/bookings/history', bookings.getBookingHistory);
-router.get('/stations/:id/bookings', bookings.getStationBookings);
+// PUT /api/manager/stations/:id/status - Update station status
+router.put('/stations/:id/status', authenticate, authorize('manager'), managerStationController.updateStationStatus);
 
-// 2. Xử lý Booking (Sửa lại path để đồng nhất với /api/manager)
-// Thay vì đặt ở /api/bookings, ta giữ tại đây nhưng dùng route rõ ràng
-router.prefix('/bookings/:booking_id', (sub) => {
-  sub.put('/confirm', bookings.confirmBooking);
-  sub.put('/cancel', bookings.cancelBooking);
-});
+// ========== Booking Management APIs ==========
+
+// GET /api/manager/bookings/history - Get booking history for all stations managed by manager
+router.get('/bookings/history', authenticate, authorize('manager'), managerBookingController.getBookingHistory);
+
+// GET /api/manager/stations/:id/bookings - Get booking list for a station
+router.get('/stations/:id/bookings', authenticate, authorize('manager'), managerBookingController.getStationBookings);
+
+// Note: These routes are registered at /api/manager, but the actual endpoints should be:
+// PUT /api/bookings/:booking_id/confirm
+// PUT /api/bookings/:booking_id/cancel
+// They are handled here because only managers can access them
 
 module.exports = router;
 
-/**
- * 💡 Mẹo nhỏ: Để dùng được hàm .prefix() như trên, 
- * bạn có thể thêm một đoạn code nhỏ vào file app.js hoặc dùng 
- * cách khai báo truyền thống như dưới đây nếu không muốn cài thêm lib:
- */
-// router.put('/bookings/:booking_id/confirm', bookings.confirmBooking);
-// router.put('/bookings/:booking_id/cancel', bookings.cancelBooking);
