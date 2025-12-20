@@ -175,6 +175,7 @@ exports.createStation = async (req, res, next) => {
       charging_power: charging_power || null,
       connector_types: connector_types || null,
       opening_hours: opening_hours || null,
+      avatar_url: finalAvatarUrl,
       status: status || 'active',
       manager_id: manager_id || null
     });
@@ -356,8 +357,16 @@ exports.updateStation = async (req, res, next) => {
       connector_types,
       opening_hours,
       status,
-      manager_id
+      manager_id,
+      avatar_url
     } = req.body;
+
+    // Handle avatar upload
+    let finalAvatarUrl = avatar_url !== undefined ? avatar_url : station.avatar_url;
+    if (req.file) {
+      // If file uploaded, use the uploaded file path
+      finalAvatarUrl = `/uploads/stations/${req.file.filename}`;
+    }
 
     // Find station
     const station = await Station.findByPk(station_id);
@@ -380,6 +389,7 @@ exports.updateStation = async (req, res, next) => {
       connector_types, // Required trong UI
       charging_power: charging_power !== undefined ? charging_power : station.charging_power,
       opening_hours: opening_hours !== undefined ? opening_hours : station.opening_hours,
+      avatar_url: finalAvatarUrl,
       status: status !== undefined ? status : station.status,
       manager_id: manager_id !== undefined ? manager_id : station.manager_id
     };

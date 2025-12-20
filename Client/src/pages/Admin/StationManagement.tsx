@@ -206,27 +206,40 @@ const StationManagement = () => {
 
   const handleSubmitStation = async (data: any) => {
     try {
-      if (formModal.station) {
-        // Update existing station
-        await adminService.updateStation(formModal.station.station_id, data);
-        setAlertModal({
-          show: true,
-          title: 'Thành công!',
-          message: `Đã cập nhật trạm sạc ${data.station_name}`,
-          type: 'success'
+      // Nếu có avatar_file, gửi qua FormData
+      if (data.avatar_file) {
+        const formData = new FormData();
+        Object.keys(data).forEach(key => {
+          if (key === 'avatar_file') {
+            formData.append('avatar', data.avatar_file);
+          } else if (data[key] !== null && data[key] !== undefined) {
+            formData.append(key, data[key].toString());
+          }
         });
-        setFormModal({ show: false, station: null });
+        
+        if (formModal.station) {
+          await adminService.updateStation(formModal.station.station_id, formData, true);
+        } else {
+          await adminService.createStation(formData, true);
+        }
       } else {
-        // Create new station
-        await adminService.createStation(data);
-        setAlertModal({
-          show: true,
-          title: 'Thành công!',
-          message: `Đã thêm trạm sạc ${data.station_name}`,
-          type: 'success'
-        });
-        setFormModal({ show: false, station: null });
+        // Không có file, gửi JSON bình thường
+        if (formModal.station) {
+          await adminService.updateStation(formModal.station.station_id, data);
+        } else {
+          await adminService.createStation(data);
+        }
       }
+      
+      setAlertModal({
+        show: true,
+        title: 'Thành công!',
+        message: formModal.station 
+          ? `Đã cập nhật trạm sạc ${data.station_name}`
+          : `Đã thêm trạm sạc ${data.station_name}`,
+        type: 'success'
+      });
+      setFormModal({ show: false, station: null });
       loadStations();
       loadStationStats();
     } catch (error: any) {

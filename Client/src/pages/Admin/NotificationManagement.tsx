@@ -80,19 +80,22 @@ const NotificationManagement = () => {
     if (!validate()) return;
 
     try {
-      const recipients = formData.target === 'all' ? 'all' : selectedUsers;
+      // Backend yêu cầu: send_to ('all' | 'selected') và user_ids (nếu selected)
+      const send_to = formData.target === 'all' ? 'all' : 'selected';
+      const user_ids = formData.target === 'all' ? undefined : selectedUsers;
       
       const result = await adminService.sendNotification({
         title: formData.title,
         message: formData.message,
         type: formData.type,
-        recipients
+        send_to,
+        user_ids
       });
 
       setAlertModal({
         show: true,
         title: 'Gửi thành công!',
-        message: `Đã gửi thông báo đến ${result.data?.sent_count || 0} người dùng`,
+        message: `Đã gửi thông báo đến ${result.data?.recipient_count || result.data?.sent_count || 0} người dùng`,
         type: 'success'
       });
 

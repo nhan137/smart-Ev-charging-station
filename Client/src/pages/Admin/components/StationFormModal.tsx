@@ -19,8 +19,11 @@ const StationFormModal = ({ isOpen, onClose, station, onSubmit }: StationFormMod
     price_per_kwh: '',
     station_type: 'ca_hai',
     connector_types: '',
-    status: 'active'
+    status: 'active',
+    avatar_url: ''
   });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (station) {
@@ -33,8 +36,12 @@ const StationFormModal = ({ isOpen, onClose, station, onSubmit }: StationFormMod
         price_per_kwh: station.price_per_kwh?.toString() || '',
         station_type: station.station_type || 'ca_hai',
         connector_types: station.connector_types || '',
-        status: station.status || 'active'
+        status: station.status || 'active',
+        avatar_url: station.avatar_url || ''
       });
+      if (station.avatar_url) {
+        setAvatarPreview(station.avatar_url);
+      }
     }
   }, [station]);
 
@@ -42,13 +49,20 @@ const StationFormModal = ({ isOpen, onClose, station, onSubmit }: StationFormMod
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
+    const submitData: any = {
       ...formData,
       latitude: parseFloat(formData.latitude),
       longitude: parseFloat(formData.longitude),
       total_slots: parseInt(formData.total_slots),
       price_per_kwh: parseFloat(formData.price_per_kwh)
-    });
+    };
+    
+    // Nếu có file ảnh mới, thêm vào FormData
+    if (avatarFile) {
+      submitData.avatar_file = avatarFile;
+    }
+    
+    onSubmit(submitData);
     onClose();
   };
 
@@ -163,6 +177,53 @@ const StationFormModal = ({ isOpen, onClose, station, onSubmit }: StationFormMod
               <option value="maintenance">Bảo trì</option>
               <option value="inactive">Ngừng hoạt động</option>
             </select>
+          </div>
+
+          <div className="form-group">
+            <label>Hình ảnh trạm (Tùy chọn)</label>
+            <div style={{ marginBottom: '10px' }}>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setAvatarFile(file);
+                    const preview = URL.createObjectURL(file);
+                    setAvatarPreview(preview);
+                  }
+                }}
+              />
+            </div>
+            {avatarPreview && (
+              <div style={{ marginTop: '10px' }}>
+                <img 
+                  src={avatarPreview} 
+                  alt="Preview" 
+                  style={{ maxWidth: '200px', maxHeight: '200px', borderRadius: '8px', objectFit: 'cover' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvatarFile(null);
+                    setAvatarPreview(null);
+                    setFormData({ ...formData, avatar_url: '' });
+                  }}
+                  style={{ marginLeft: '10px', padding: '5px 10px', background: 'red', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  Xóa ảnh
+                </button>
+              </div>
+            )}
+            {!avatarPreview && formData.avatar_url && (
+              <div style={{ marginTop: '10px' }}>
+                <img 
+                  src={formData.avatar_url} 
+                  alt="Current" 
+                  style={{ maxWidth: '200px', maxHeight: '200px', borderRadius: '8px', objectFit: 'cover' }}
+                />
+              </div>
+            )}
           </div>
 
           <div className="modal-actions">

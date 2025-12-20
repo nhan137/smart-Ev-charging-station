@@ -78,13 +78,19 @@ exports.createReport = async (req, res, next) => {
     const reporterName = reporter ? reporter.full_name : 'Người dùng';
     const stationName = station.station_name;
 
+    console.log(`[createReport] Reporter ID: ${reporterId}, Role ID: ${reporterRoleId}, Name: ${reporterName}`);
+    console.log(`[createReport] Station ID: ${station_id}, Station Name: ${stationName}`);
+
     // Insert report
-    await conn.query(
+    const [insertResult] = await conn.query(
       `INSERT INTO reports
        (station_id, reporter_id, title, description, image_url, status, reported_at)
        VALUES (?, ?, ?, ?, ?, 'pending', NOW())`,
       [station_id, reporterId, title, finalDescription, imageUrl]
     );
+    
+    const newReportId = insertResult.insertId;
+    console.log(`[createReport] Created report ID: ${newReportId} with reporter_id: ${reporterId} (role_id: ${reporterRoleId})`);
 
     const notifValues = [];
 
@@ -451,9 +457,19 @@ exports.getManagerHistory = async (req, res, next) => {
 // GET /api/reports/admin
 // Admin xem danh sách báo cáo do Manager gửi lên (role_id = 2), sắp xếp mới nhất trước
 exports.getReportsForAdmin = async (req, res, next) => {
+  console.log(`[getReportsForAdmin] Called by user ID: ${req.user?.user_id}, Role ID: ${req.user?.role_id}`);
   let conn;
   try {
     conn = await pool.getConnection();
+
+    // Debug: Check all reports first
+    const [allReports] = await conn.query(
+      `SELECT r.report_id, r.reporter_id, u.role_id, u.full_name 
+       FROM reports r 
+       LEFT JOIN users u ON r.reporter_id = u.user_id 
+       ORDER BY r.reported_at DESC LIMIT 10`
+    );
+    console.log('[getReportsForAdmin] All recent reports:', JSON.stringify(allReports, null, 2));
 
     const [rows] = await conn.query(
       `SELECT 
@@ -473,8 +489,14 @@ exports.getReportsForAdmin = async (req, res, next) => {
        JOIN stations s ON r.station_id = s.station_id
        JOIN users u ON r.reporter_id = u.user_id
        WHERE u.role_id = 2
+         AND r.status = 'pending'
        ORDER BY r.reported_at DESC`
     );
+
+    console.log(`[getReportsForAdmin] Found ${rows.length} reports from Managers (role_id = 2)`);
+    if (rows.length > 0) {
+      console.log('[getReportsForAdmin] Sample report:', JSON.stringify(rows[0], null, 2));
+    }
 
     // Format response to match UI
     const formattedRows = rows.map(row => {
@@ -508,10 +530,9 @@ exports.getReportsForAdmin = async (req, res, next) => {
         ? row.description.substring(0, 100) + '...' 
         : row.description;
 
-      // Action button logic
-      const actionButton = row.status === 'pending' 
-        ? { text: 'Đã xử lý', color: 'blue', action: 'resolve' }
-        : { text: 'Mở lại', color: 'orange', action: 'reopen' };
+      // Action button logic - Only show "Đã xử lý" for pending reports
+      // (Resolved reports are not shown in the list)
+      const actionButton = { text: 'Đã xử lý', color: 'blue', action: 'resolve' };
 
       return {
         report_id: row.report_id,
@@ -852,13 +873,16 @@ exports.getUserReportDetail = async (req, res, next) => {
       station_name: report.station_name,
       title: report.title,
       description: report.description,
-      images: images, // Array of image URLs
+      image_url: report.image_url, // Keep original for compatibility
+      images: images, // Array of image URLs (parsed)
       status: report.status,
       status_label: report.status === 'pending' ? 'Đang chờ' : 'Đã xử lý',
       reported_at: report.reported_at,
       reported_at: report.reported_at,
       status_history: statusHistory
     };
+    
+    console.log(`[getUserReportDetail] Report ${report_id} images:`, images);
 
     return res.json({
       success: true,

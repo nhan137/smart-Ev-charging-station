@@ -82,13 +82,17 @@ exports.authorize = (...roles) => {
     const userRoleId = req.user.role_id;
     const allowedRoleIds = roles.map(role => roleMap[role.toLowerCase()]);
     
+    console.log(`[authorize] User ID: ${req.user.user_id}, Role ID: ${userRoleId}, Required roles: ${roles.join(', ')}, Allowed role IDs: ${allowedRoleIds.join(', ')}`);
+    
     if (!allowedRoleIds.includes(userRoleId)) {
+      console.log(`[authorize] Access denied for user ${req.user.user_id} (role_id: ${userRoleId}). Required: ${allowedRoleIds.join(', ')}`);
       return res.status(403).json({
         success: false,
         message: 'Access denied. Insufficient permissions'
       });
     }
 
+    console.log(`[authorize] Access granted for user ${req.user.user_id} (role_id: ${userRoleId})`);
     next();
   };
 };

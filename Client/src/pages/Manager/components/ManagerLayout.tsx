@@ -38,7 +38,11 @@ const ManagerLayout = () => {
     
     // Listen for notification updates
     const handleNotificationUpdate = () => {
-      loadUnreadCount();
+      console.log('[ManagerLayout] Notification updated event received, reloading unread count...');
+      // Delay slightly to ensure backend has updated
+      setTimeout(() => {
+        loadUnreadCount();
+      }, 100);
     };
     window.addEventListener('notification-updated', handleNotificationUpdate);
     
@@ -50,23 +54,32 @@ const ManagerLayout = () => {
 
   const loadUnreadCount = async () => {
     try {
-      // Backend trả về unread_count trong response.data
+      // Load all notifications to get unread_count from backend
+      // Backend luôn trả về unread_count trong response.data
       const response = await managerService.getNotifications();
+      console.log('[ManagerLayout] Load unread count response:', response);
       if (response.success && response.data) {
-        // Backend có thể trả về unread_count trực tiếp
+        // Backend trả về unread_count trong response.data
         if (response.data.unread_count !== undefined) {
+          console.log('[ManagerLayout] Setting unread count to:', response.data.unread_count);
           setUnreadNotificationCount(response.data.unread_count);
         } else {
-          // Fallback: đếm từ notifications array
+          // Fallback: đếm từ notifications array với status='unread'
           const notifications = Array.isArray(response.data) ? response.data : (response.data.notifications || []);
           const unreadCount = notifications.filter((n: any) => 
-            (n.status === 'unread') || (!n.is_read && !n.isRead)
+            n.status === 'unread'
           ).length;
+          console.log('[ManagerLayout] Fallback: Unread count:', unreadCount, 'from', notifications.length, 'notifications');
           setUnreadNotificationCount(unreadCount);
         }
+      } else {
+        console.warn('[ManagerLayout] No data in response:', response);
+        setUnreadNotificationCount(0);
       }
     } catch (error: any) {
-      console.error('Error loading unread count:', error);
+      console.error('[ManagerLayout] Error loading unread count:', error);
+      // Set to 0 on error to avoid showing stale count
+      setUnreadNotificationCount(0);
     }
   };
 

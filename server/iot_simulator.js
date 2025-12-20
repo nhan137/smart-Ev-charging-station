@@ -8,11 +8,10 @@ const axios = require('axios');
 // Configuration
 const API_BASE_URL = process.env.API_URL || 'http://localhost:3000';
 // Read BOOKING_ID from environment variable or command line argument
-// CRITICAL: Parse as integer to ensure it's a number
-// Try multiple sources: env var, command line arg, or check if it's set differently
+
 let BOOKING_ID_RAW = process.env.BOOKING_ID || process.argv[2] || null;
 // Read START_BATTERY_PERCENT from environment variable or command line argument
-// If not provided, default to 0% (user requirement: start from 0%)
+
 let START_BATTERY_PERCENT_RAW = process.env.START_BATTERY_PERCENT || process.argv[3] || null;
 
 // Debug: Log what we received
@@ -23,6 +22,8 @@ console.log(`  - BOOKING_ID_RAW: ${BOOKING_ID_RAW || 'null'}`);
 
 const BOOKING_ID = BOOKING_ID_RAW ? parseInt(BOOKING_ID_RAW) : null;
 const START_BATTERY_PERCENT = START_BATTERY_PERCENT_RAW ? parseFloat(START_BATTERY_PERCENT_RAW) : 0; // Default to 0% if not provided
+
+// Ví dụ: const START_BATTERY_PERCENT = START_BATTERY_PERCENT_RAW ? parseFloat(START_BATTERY_PERCENT_RAW) : 30;
 const UPDATE_INTERVAL = 3000; // 3 seconds
 
 // Validate BOOKING_ID
@@ -50,9 +51,7 @@ if (!BOOKING_ID || isNaN(BOOKING_ID) || BOOKING_ID <= 0) {
   process.exit(1);
 }
 
-// Initial simulation state
-// CRITICAL: Get start_battery_percent from env var/command line or default to 0%
-// If IoT starts at 50%, UI must also start at 50% (sync with IoT data)
+
 let currentBatteryPercent = START_BATTERY_PERCENT; // Will be set in runSimulation(), but initialize here
 let energyConsumed = 0.0; // Start at 0 kWh
 
@@ -143,10 +142,7 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * Get start_battery_percent from env var, command line, or default to 0%
- * If IoT starts at 50%, UI must also start at 50% (sync with IoT data)
- */
+
 function getStartBatteryPercent() {
   // Use value from env var or command line argument if provided
   if (START_BATTERY_PERCENT !== null && !isNaN(START_BATTERY_PERCENT) && START_BATTERY_PERCENT >= 0 && START_BATTERY_PERCENT <= 100) {

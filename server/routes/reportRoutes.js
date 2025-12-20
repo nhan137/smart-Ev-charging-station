@@ -30,6 +30,14 @@ router.post('/', authenticate, upload.array('images', 5), reportController.creat
 // GET /api/reports/my - User xem lịch sử báo cáo sự cố của mình
 router.get('/my', authenticate, authorize('user'), reportController.getMyReports);
 
+// GET /api/reports/admin - Admin xem danh sách báo cáo do Manager gửi (PHẢI ĐẶT TRƯỚC /:report_id)
+router.get(
+  '/admin',
+  authenticate,
+  authorize('admin'),
+  reportController.getReportsForAdmin
+);
+
 // GET /api/reports/:report_id - User xem chi tiết 1 báo cáo của mình
 router.get('/:report_id', authenticate, authorize('user'), reportController.getUserReportDetail);
 
@@ -63,14 +71,6 @@ router.get(
   authenticate,
   authorize('manager'),
   reportController.getManagerHistory
-);
-
-// GET /api/reports/admin - Admin xem danh sách báo cáo do Manager gửi
-router.get(
-  '/admin',
-  authenticate,
-  authorize('admin'),
-  reportController.getReportsForAdmin
 );
 
 // PUT /api/reports/:report_id/status - Admin phê duyệt / đánh dấu đã xử lý báo cáo của Manager

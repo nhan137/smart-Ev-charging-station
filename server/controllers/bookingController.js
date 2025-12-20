@@ -580,6 +580,7 @@ exports.getBookingById = async (req, res, next) => {
         booking_id: bookingData.booking_id,
         station: station,
         station_id: bookingData.station_id,
+        station_name: station?.station_name || null, // Top-level for easy access
         vehicle_type: bookingData.vehicle_type,
         actual_start: bookingData.actual_start || bookingData.start_time,
         actual_end: bookingData.actual_end || bookingData.end_time,
@@ -590,6 +591,12 @@ exports.getBookingById = async (req, res, next) => {
         chargingSession: chargingSession,
         promotion: promotion,
         payment: payment,
+        // Include energy_consumed, payment_method, payment_status at top level for easy access
+        energy_consumed: chargingSession?.energy_consumed ? parseFloat(chargingSession.energy_consumed) : null,
+        payment_method: payment?.method || null,
+        payment_method_display: paymentMethodDisplay,
+        payment_status: payment?.status || null,
+        payment_status_display: paymentStatusDisplay,
         // Include price_per_kwh from station
         price_per_kwh: station?.price_per_kwh || null
       }

@@ -1,4 +1,7 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const router = express.Router();
 const adminDashboardController = require('../controllers/adminDashboardController');
 const adminNotificationController = require('../controllers/adminNotificationController');
@@ -8,6 +11,31 @@ const adminBookingController = require('../controllers/adminBookingController');
 const adminPaymentController = require('../controllers/adminPaymentController');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validateUser, validateAdminUserUpdate, validateUserStatus, validateStation, validateStationUpdate } = require('../middleware/validation');
+
+// Multer setup for station avatar upload
+const stationUploadDir = path.join(__dirname, '..', 'uploads', 'stations');
+fs.mkdirSync(stationUploadDir, { recursive: true });
+
+const stationStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, stationUploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/\s+/g, '_').toLowerCase();
+    cb(null, `station_${Date.now()}_${base}${ext}`);
+  }
+});
+
+const stationUpload = multer({ 
+  storage: stationStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Chỉ chấp nhận file ảnh'));
+    }
+  }
+});
 
 /**
  * Admin Routes
@@ -70,14 +98,14 @@ router.get('/stations/stats', authenticate, authorize('admin'), adminStationCont
 // GET /api/admin/stations - Get all stations with filters
 router.get('/stations', authenticate, authorize('admin'), adminStationController.getStations);
 
-// POST /api/admin/stations - Create new station
-router.post('/stations', authenticate, authorize('admin'), validateStation, adminStationController.createStation);
+// POST /api/admin/stations - Create new station (with optional avatar upload)
+router.post('/stations', authenticate, authorize('admin'), stationUpload.single('avatar'), validateStation, adminStationController.createStation);
 
 // GET /api/admin/stations/:station_id - Get station by ID
 router.get('/stations/:station_id', authenticate, authorize('admin'), adminStationController.getStationById);
 
-// PUT /api/admin/stations/:station_id - Update station
-router.put('/stations/:station_id', authenticate, authorize('admin'), validateStationUpdate, adminStationController.updateStation);
+// PUT /api/admin/stations/:station_id - Update station (with optional avatar upload)
+router.put('/stations/:station_id', authenticate, authorize('admin'), stationUpload.single('avatar'), validateStationUpdate, adminStationController.updateStation);
 
 // DELETE /api/admin/stations/:station_id - Delete station
 router.delete('/stations/:station_id', authenticate, authorize('admin'), adminStationController.deleteStation);

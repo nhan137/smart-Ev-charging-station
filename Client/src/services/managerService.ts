@@ -191,11 +191,18 @@ export const managerService = {
   getNotifications: async (filters?: {
     type?: string;
     is_read?: boolean;
+    status?: string;
   }) => {
     try {
       const params = new URLSearchParams();
       if (filters?.type) params.append('type', filters.type);
-      if (filters?.is_read !== undefined) params.append('is_read', filters.is_read.toString());
+      // Backend sử dụng 'status' (unread/read), không phải 'is_read'
+      if (filters?.status) {
+        params.append('status', filters.status);
+      } else if (filters?.is_read !== undefined) {
+        // Map is_read to status
+        params.append('status', filters.is_read ? 'read' : 'unread');
+      }
       
       const response = await api.get(`/notifications?${params.toString()}`);
       return response.data;

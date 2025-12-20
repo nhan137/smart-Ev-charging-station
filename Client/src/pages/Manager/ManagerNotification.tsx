@@ -34,17 +34,16 @@ const ManagerNotifications = () => {
       
       if (response.success && response.data) {
         const notificationsData = Array.isArray(response.data) ? response.data : (response.data.notifications || []);
-        // Giữ lại trạng thái isRead của các notification đã được đánh dấu
+        // Map notifications với status từ backend (status: 'unread' hoặc 'read')
         const list = notificationsData
           .map((notif: any) => {
-            const existing = notifications.find(n => (n.notification_id || n.id) === (notif.notification_id || notif.id));
             // Backend trả về status: 'unread' hoặc 'read'
-            const isRead = existing ? existing.isRead : (notif.status === 'read' || notif.is_read || notif.isRead || false);
+            const isRead = notif.status === 'read' || notif.is_read === true || notif.isRead === true;
             return {
               ...notif,
               notification_id: notif.notification_id || notif.id,
               isRead: isRead,
-              receivedAt: notif.sent_at || notif.sentAt || notif.created_at,
+              receivedAt: notif.sent_at || notif.sentAt || notif.created_at || notif.createdAt,
               title: notif.title || 'Thông báo',
               message: notif.message || notif.content || '',
               type: notif.type || 'system'
@@ -52,6 +51,7 @@ const ManagerNotifications = () => {
           })
           .sort((a: any, b: any) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
 
+        console.log('[ManagerNotification] Loaded', list.length, 'notifications, unread:', list.filter(n => !n.isRead).length);
         setNotifications(list);
       }
     } catch (error: any) {
@@ -63,14 +63,17 @@ const ManagerNotifications = () => {
 
   const handleMarkAsRead = async (notificationId: number) => {
     try {
-      await managerService.markNotificationAsRead(notificationId);
+      const response = await managerService.markNotificationAsRead(notificationId);
+      console.log('[ManagerNotification] Mark as read response:', response);
       setNotifications(prev =>
         prev.map(notif =>
           notif.notification_id === notificationId
-            ? { ...notif, isRead: true }
+            ? { ...notif, isRead: true, status: 'read' }
             : notif
         )
       );
+      // Reload notifications to get updated status from backend
+      await loadNotifications();
       // Trigger update badge count in layout
       window.dispatchEvent(new Event('notification-updated'));
     } catch (error: any) {
@@ -80,8 +83,11 @@ const ManagerNotifications = () => {
 
   const handleMarkAllAsRead = async () => {
     try {
-      await managerService.markAllNotificationsAsRead();
+      const response = await managerService.markAllNotificationsAsRead();
+      console.log('[ManagerNotification] Mark all as read response:', response);
       setNotifications(prev => prev.map(notif => ({ ...notif, isRead: true })));
+      // Reload notifications to get updated status from backend
+      await loadNotifications();
       // Trigger update badge count in layout
       window.dispatchEvent(new Event('notification-updated'));
     } catch (error: any) {

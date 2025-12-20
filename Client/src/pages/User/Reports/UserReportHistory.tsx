@@ -197,9 +197,13 @@ const UserReportHistory = () => {
       }
       
       try {
+        console.log('[UserReportHistory] Loading report detail for ID:', numericId);
         const response = await reportService.getReportDetail(numericId);
+        console.log('[UserReportHistory] Report detail response:', response);
         if (response.success && response.data) {
           const detailedReport = normalizeReports([response.data])[0];
+          console.log('[UserReportHistory] Normalized report detail:', detailedReport);
+          console.log('[UserReportHistory] Images in detail:', detailedReport.images);
           setSelected(detailedReport);
         }
       } catch (err: any) {

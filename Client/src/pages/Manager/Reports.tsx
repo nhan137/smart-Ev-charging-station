@@ -11,6 +11,8 @@ const Reports = () => {
   const [selectedStation, setSelectedStation] = useState<string>('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [images, setImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
     show: false,
@@ -64,7 +66,8 @@ const Reports = () => {
       await managerService.createReport({
         station_id: Number(selectedStation),
         title: title.trim(),
-        description: description.trim()
+        description: description.trim(),
+        images: images // Gửi ảnh qua FormData
       });
 
       setAlertModal({
@@ -76,6 +79,8 @@ const Reports = () => {
 
       setTitle('');
       setDescription('');
+      setImages([]);
+      setImagePreviews([]);
     } catch (error: any) {
       setAlertModal({
         show: true,
@@ -149,12 +154,55 @@ const Reports = () => {
           </div>
 
           <div className="form-group">
-            <label>Upload ảnh (Tùy chọn)</label>
+            <label>Upload ảnh (Tùy chọn - tối đa 5 ảnh)</label>
             <div className="upload-box">
               <FileText size={32} />
               <p>Kéo thả ảnh vào đây hoặc click để chọn</p>
-              <input type="file" accept="image/*" multiple />
+              <input 
+                type="file" 
+                accept="image/*" 
+                multiple 
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 5) {
+                    setAlertModal({
+                      show: true,
+                      title: 'Lỗi',
+                      message: 'Chỉ được upload tối đa 5 ảnh',
+                      type: 'error'
+                    });
+                    return;
+                  }
+                  setImages(files.slice(0, 5));
+                  // Tạo preview
+                  const previews = files.slice(0, 5).map(file => URL.createObjectURL(file));
+                  setImagePreviews(previews);
+                }}
+              />
             </div>
+            {imagePreviews.length > 0 && (
+              <div className="image-preview-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px', marginTop: '10px' }}>
+                {imagePreviews.map((preview, idx) => (
+                  <div key={idx} style={{ position: 'relative' }}>
+                    <img src={preview} alt={`Preview ${idx + 1}`} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newImages = images.filter((_, i) => i !== idx);
+                        const newPreviews = imagePreviews.filter((_, i) => i !== idx);
+                        setImages(newImages);
+                        setImagePreviews(newPreviews);
+                        // Revoke object URL
+                        URL.revokeObjectURL(preview);
+                      }}
+                      style={{ position: 'absolute', top: '5px', right: '5px', background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer' }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="form-actions">
@@ -164,6 +212,9 @@ const Reports = () => {
               onClick={() => {
                 setTitle('');
                 setDescription('');
+                setImages([]);
+                imagePreviews.forEach(preview => URL.revokeObjectURL(preview));
+                setImagePreviews([]);
               }}
             >
               Hủy

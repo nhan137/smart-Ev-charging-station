@@ -237,9 +237,12 @@ export const adminService = {
    * Create new station
    * POST /api/admin/stations
    */
-  createStation: async (data: any) => {
+  createStation: async (data: any, isFormData: boolean = false) => {
     try {
-      const response = await api.post('/admin/stations', data);
+      const config = isFormData 
+        ? { headers: { 'Content-Type': 'multipart/form-data' } }
+        : {};
+      const response = await api.post('/admin/stations', data, config);
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Không thể tạo trạm sạc');
@@ -250,9 +253,12 @@ export const adminService = {
    * Update station
    * PUT /api/admin/stations/:station_id
    */
-  updateStation: async (stationId: number, data: any) => {
+  updateStation: async (stationId: number, data: any, isFormData: boolean = false) => {
     try {
-      const response = await api.put(`/admin/stations/${stationId}`, data);
+      const config = isFormData 
+        ? { headers: { 'Content-Type': 'multipart/form-data' } }
+        : {};
+      const response = await api.put(`/admin/stations/${stationId}`, data, config);
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Không thể cập nhật trạm sạc');
@@ -433,7 +439,8 @@ export const adminService = {
     title: string;
     message: string;
     type: string;
-    recipients: 'all' | number[];
+    send_to: 'all' | 'selected';
+    user_ids?: number[];
   }) => {
     try {
       const response = await api.post('/admin/notifications', data);

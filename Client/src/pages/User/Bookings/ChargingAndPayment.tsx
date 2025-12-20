@@ -167,9 +167,53 @@ const ChargingAndPayment = () => {
     return <span className={`status-badge ${config.class}`}>{config.label}</span>;
   };
 
-  // Handle view detail
-  const handleViewDetail = (booking: any) => {
-    setSelectedBooking(booking);
+  // Handle view detail - Load full booking data with chargingSession
+  const handleViewDetail = async (booking: any) => {
+    try {
+      // Load full booking details from API to get chargingSession data
+      const response = await bookingService.getBookingById(booking.booking_id);
+      console.log('[ChargingAndPayment] getBookingById response:', response);
+      if (response.success && response.data) {
+        const apiData = response.data;
+        
+        // Backend trả về cả structured data (station_info, charging_time, energy_info, payment_info) và raw data (station, chargingSession, payment)
+        // Map sang flat structure để tương thích với UI
+        const fullBooking: any = {
+          ...booking, // Giữ lại data từ list
+          // Station info - ưu tiên structured, sau đó raw, cuối cùng là booking
+          station_name: apiData.station_info?.station_name || apiData.station?.station_name || apiData.station_name || booking.station_name,
+          vehicle_type: apiData.station_info?.vehicle_type || apiData.vehicle_type || booking.vehicle_type,
+          // Charging time - ưu tiên structured, sau đó raw
+          actual_start: apiData.charging_time?.start ? new Date(apiData.charging_time.start).toISOString() : (apiData.actual_start || booking.actual_start),
+          actual_end: apiData.charging_time?.end ? new Date(apiData.charging_time.end).toISOString() : (apiData.actual_end || booking.actual_end),
+          duration: apiData.charging_time?.duration || booking.duration,
+          // Energy info - ưu tiên structured, sau đó chargingSession, cuối cùng là booking
+          start_battery_percent: apiData.energy_info?.start_battery ?? apiData.chargingSession?.start_battery_percent ?? booking.start_battery_percent,
+          end_battery_percent: apiData.energy_info?.end_battery ?? apiData.chargingSession?.end_battery_percent ?? booking.end_battery_percent,
+          energy_consumed: apiData.energy_info?.energy_consumed ?? apiData.chargingSession?.energy_consumed ?? booking.energy_consumed,
+          // Payment info - ưu tiên structured, sau đó payment object, cuối cùng là booking
+          payment_method: apiData.payment_info?.method || apiData.payment?.method || booking.payment_method,
+          payment_method_display: apiData.payment_info?.method || apiData.payment_method_display || booking.payment_method_display,
+          payment_status: apiData.payment_info?.status_raw || apiData.payment?.status || apiData.payment_status || booking.payment_status,
+          total_cost: apiData.payment_info?.total_amount ?? apiData.total_cost ?? booking.total_cost,
+          promotion_code: apiData.payment_info?.discount_code || apiData.promotion_code || booking.promotion_code,
+          // Keep chargingSession and payment for fallback
+          chargingSession: apiData.chargingSession || booking.chargingSession,
+          payment: apiData.payment || booking.payment
+        };
+        
+        console.log('[ChargingAndPayment] Mapped full booking data:', fullBooking);
+        setSelectedBooking(fullBooking);
+      } else {
+        // Fallback to original booking data
+        console.warn('[ChargingAndPayment] No data in response, using original booking');
+        setSelectedBooking(booking);
+      }
+    } catch (err: any) {
+      console.error('[ChargingAndPayment] Error loading booking detail:', err);
+      // Fallback to original booking data
+      setSelectedBooking(booking);
+    }
     setShowDetailModal(true);
   };
 
@@ -357,7 +401,7 @@ const ChargingAndPayment = () => {
               <div className="modal-info-grid">
                 <div className="modal-info-item">
                   <span>Trạm sạc:</span>
-                  <span>{selectedBooking.station_name}</span>
+                  <span>{selectedBooking.station_name || selectedBooking.station?.station_name || 'N/A'}</span>
                 </div>
                 <div className="modal-info-item">
                   <span>Loại xe:</span>
@@ -389,15 +433,33 @@ const ChargingAndPayment = () => {
               <div className="modal-info-grid">
                 <div className="modal-info-item">
                   <span>Pin ban đầu:</span>
-                  <span>{selectedBooking.start_battery_percent !== undefined ? `${selectedBooking.start_battery_percent}%` : 'N/A'}</span>
+                  <span>
+                    {selectedBooking.start_battery_percent !== undefined && selectedBooking.start_battery_percent !== null
+                      ? `${selectedBooking.start_battery_percent}%`
+                      : (selectedBooking.chargingSession?.start_battery_percent !== undefined
+                        ? `${selectedBooking.chargingSession.start_battery_percent}%`
+                        : 'N/A')}
+                  </span>
                 </div>
                 <div className="modal-info-item">
                   <span>Pin sau sạc:</span>
-                  <span>{selectedBooking.end_battery_percent !== undefined ? `${selectedBooking.end_battery_percent}%` : 'N/A'}</span>
+                  <span>
+                    {selectedBooking.end_battery_percent !== undefined && selectedBooking.end_battery_percent !== null
+                      ? `${selectedBooking.end_battery_percent}%`
+                      : (selectedBooking.chargingSession?.end_battery_percent !== undefined
+                        ? `${selectedBooking.chargingSession.end_battery_percent}%`
+                        : 'N/A')}
+                  </span>
                 </div>
                 <div className="modal-info-item">
                   <span>Năng lượng tiêu thụ:</span>
-                  <span>{selectedBooking.energy_consumed ? `${selectedBooking.energy_consumed} kWh` : 'N/A'}</span>
+                  <span>
+                    {selectedBooking.energy_consumed !== undefined && selectedBooking.energy_consumed !== null
+                      ? `${selectedBooking.energy_consumed} kWh`
+                      : (selectedBooking.chargingSession?.energy_consumed !== undefined && selectedBooking.chargingSession?.energy_consumed !== null
+                        ? `${selectedBooking.chargingSession.energy_consumed} kWh`
+                        : 'N/A')}
+                  </span>
                 </div>
               </div>
             </div>
@@ -407,11 +469,18 @@ const ChargingAndPayment = () => {
               <div className="modal-info-grid">
                 <div className="modal-info-item">
                   <span>Phương thức:</span>
-                  <span>{selectedBooking.payment_method_display || selectedBooking.payment_method || 'N/A'}</span>
+                  <span>
+                    {selectedBooking.payment_method_display 
+                      || selectedBooking.payment_method 
+                      || selectedBooking.payment?.method 
+                      || 'N/A'}
+                  </span>
                 </div>
                 <div className="modal-info-item">
                   <span>Trạng thái:</span>
-                  {getStatusBadge(selectedBooking.payment_status, 'payment')}
+                  {selectedBooking.payment_status || selectedBooking.payment?.status
+                    ? getStatusBadge(selectedBooking.payment_status || selectedBooking.payment?.status, 'payment')
+                    : <span>N/A</span>}
                 </div>
                 {selectedBooking.promotion_code && (
                   <div className="modal-info-item">

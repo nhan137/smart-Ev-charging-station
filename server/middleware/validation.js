@@ -255,14 +255,17 @@ exports.validateStation = [
   
   body('latitude')
     .optional({ nullable: true })
+    .customSanitizer(value => value === '' ? null : value)
     .isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
   
   body('longitude')
     .optional({ nullable: true })
+    .customSanitizer(value => value === '' ? null : value)
     .isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
   
   body('price_per_kwh')
     .notEmpty().withMessage('Price per KWH is required')
+    .customSanitizer(value => typeof value === 'string' ? parseFloat(value) : value)
     .isFloat({ min: 0 }).withMessage('Price per KWH must be greater than or equal to 0'),
   
   body('station_type')
@@ -322,14 +325,17 @@ exports.validateStationUpdate = [
   
   body('latitude')
     .notEmpty().withMessage('Latitude is required')
+    .customSanitizer(value => typeof value === 'string' ? parseFloat(value) : value)
     .isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
   
   body('longitude')
     .notEmpty().withMessage('Longitude is required')
+    .customSanitizer(value => typeof value === 'string' ? parseFloat(value) : value)
     .isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
   
   body('price_per_kwh')
     .notEmpty().withMessage('Price per KWH is required')
+    .customSanitizer(value => typeof value === 'string' ? parseFloat(value) : value)
     .isFloat({ min: 0 }).withMessage('Price per KWH must be greater than or equal to 0'),
   
   body('station_type')
@@ -338,6 +344,7 @@ exports.validateStationUpdate = [
   
   body('total_slots')
     .notEmpty().withMessage('Total slots is required')
+    .customSanitizer(value => typeof value === 'string' ? parseInt(value) : value)
     .isInt({ min: 1 }).withMessage('Total slots must be at least 1'),
   
   body('connector_types')
