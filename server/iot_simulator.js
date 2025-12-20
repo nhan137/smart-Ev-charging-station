@@ -11,6 +11,9 @@ const API_BASE_URL = process.env.API_URL || 'http://localhost:3000';
 // CRITICAL: Parse as integer to ensure it's a number
 // Try multiple sources: env var, command line arg, or check if it's set differently
 let BOOKING_ID_RAW = process.env.BOOKING_ID || process.argv[2] || null;
+// Read START_BATTERY_PERCENT from environment variable or command line argument
+// If not provided, default to 0% (user requirement: start from 0%)
+let START_BATTERY_PERCENT_RAW = process.env.START_BATTERY_PERCENT || process.argv[3] || null;
 
 // Debug: Log what we received
 console.log('[IoT Simulator] Environment check:');
@@ -19,6 +22,7 @@ console.log(`  - process.argv[2]: ${process.argv[2] || 'undefined'}`);
 console.log(`  - BOOKING_ID_RAW: ${BOOKING_ID_RAW || 'null'}`);
 
 const BOOKING_ID = BOOKING_ID_RAW ? parseInt(BOOKING_ID_RAW) : null;
+const START_BATTERY_PERCENT = START_BATTERY_PERCENT_RAW ? parseFloat(START_BATTERY_PERCENT_RAW) : 0; // Default to 0% if not provided
 const UPDATE_INTERVAL = 3000; // 3 seconds
 
 // Validate BOOKING_ID
@@ -47,8 +51,9 @@ if (!BOOKING_ID || isNaN(BOOKING_ID) || BOOKING_ID <= 0) {
 }
 
 // Initial simulation state
-// CRITICAL: Start at 50% to simulate realistic charging progress
-let currentBatteryPercent = 50; // Start at 50% (not 95% - that was too high!)
+// CRITICAL: Get start_battery_percent from env var/command line or default to 0%
+// If IoT starts at 50%, UI must also start at 50% (sync with IoT data)
+let currentBatteryPercent = START_BATTERY_PERCENT; // Will be set in runSimulation(), but initialize here
 let energyConsumed = 0.0; // Start at 0 kWh
 
 /**
@@ -138,6 +143,19 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Get start_battery_percent from env var, command line, or default to 0%
+ * If IoT starts at 50%, UI must also start at 50% (sync with IoT data)
+ */
+function getStartBatteryPercent() {
+  // Use value from env var or command line argument if provided
+  if (START_BATTERY_PERCENT !== null && !isNaN(START_BATTERY_PERCENT) && START_BATTERY_PERCENT >= 0 && START_BATTERY_PERCENT <= 100) {
+    return START_BATTERY_PERCENT;
+  }
+  // Default to 0% if not provided (user requirement: start from 0%)
+  return 0;
+}
+
 // Main simulation loop with proper async/await
 let isRunning = true;
 let intervalId = null;
@@ -150,12 +168,18 @@ async function runSimulation() {
   console.log(`API URL: ${API_BASE_URL}`);
   console.log(`Booking ID: ${BOOKING_ID} ✅`);
   console.log(`Update Interval: ${UPDATE_INTERVAL}ms (${UPDATE_INTERVAL / 1000} seconds)`);
-  console.log(`Initial Battery: ${currentBatteryPercent}%`);
-  console.log(`Initial Energy: ${energyConsumed} kWh`);
   console.log('========================================');
   console.log(`⚠️  IMPORTANT: Ensure booking ${BOOKING_ID} exists in database`);
   console.log(`   - Status must be 'confirmed' or 'charging'`);
   console.log(`   - Check: SELECT * FROM bookings WHERE booking_id = ${BOOKING_ID};`);
+  console.log('========================================');
+  
+  // Get start_battery_percent from env var/command line or default to 0%
+  // If IoT starts at 50%, UI must also start at 50% (sync with IoT data)
+  currentBatteryPercent = getStartBatteryPercent();
+  
+  console.log(`Initial Battery: ${currentBatteryPercent}% ${START_BATTERY_PERCENT_RAW ? '(from START_BATTERY_PERCENT)' : '(default: 0%)'}`);
+  console.log(`Initial Energy: ${energyConsumed} kWh`);
   console.log('========================================');
   console.log('Starting simulation...\n');
 

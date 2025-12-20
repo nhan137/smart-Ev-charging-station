@@ -76,6 +76,7 @@ const normalizeReports = (input: any[]): UserReport[] => {
           : 'pending';
 
       // Parse image_url from backend (can be JSON array string or single URL)
+      // Lỗi 6: Fix image display - handle relative URLs
       let images: string[] = [];
       if (r.image_url) {
         try {
@@ -92,6 +93,22 @@ const normalizeReports = (input: any[]): UserReport[] => {
       } else if (Array.isArray(r.images)) {
         images = r.images;
       }
+      
+      // Convert relative URLs to absolute URLs (Lỗi 6: Fix image display)
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+      images = images.map((img: string) => {
+        if (!img) return img;
+        // If already absolute URL (starts with http:// or https://), return as is
+        if (img.startsWith('http://') || img.startsWith('https://')) {
+          return img;
+        }
+        // If relative URL, prepend API_BASE_URL
+        if (img.startsWith('/')) {
+          return `${API_BASE_URL}${img}`;
+        }
+        // If doesn't start with /, add it
+        return `${API_BASE_URL}/${img}`;
+      }).filter((img: string) => img); // Remove empty strings
 
       // Build status_history from backend response or create default
       let status_history: StatusHistoryItem[] = [];
@@ -349,7 +366,23 @@ const UserReportHistory = () => {
               {selected.images && selected.images.length > 0 ? (
                 <div className="image-grid">
                   {selected.images.map((src, idx) => (
-<img key={`${src}-${idx}`} src={src} alt={`report-${selected.report_id}-${idx}`} className="detail-image" />
+                    <img 
+                      key={`${src}-${idx}`} 
+                      src={src} 
+                      alt={`report-${selected.report_id}-${idx}`} 
+                      className="detail-image"
+                      onError={(e) => {
+                        // Lỗi 6: Handle image loading errors
+                        console.error(`[UserReportHistory] Failed to load image: ${src}`);
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                      onLoad={(e) => {
+                        // Ensure image is visible on successful load
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'block';
+                      }}
+                    />
                   ))}
                 </div>
               ) : (

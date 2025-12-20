@@ -40,6 +40,10 @@ const Payment = () => {
       setShowPaymentSuccessModal(true);
       // Remove query params from URL
       window.history.replaceState({}, '', window.location.pathname);
+      // Lỗi 4: Redirect to Notification screen after payment success
+      setTimeout(() => {
+        navigate('/user/notifications');
+      }, 2000);
     } else if (paymentStatus === 'failed') {
       setPaymentResult({
         status: 'failed',
@@ -79,23 +83,54 @@ const Payment = () => {
             ? parseFloat(bookingData.chargingSession.actual_cost)
             : (bookingData.total_cost ? parseFloat(bookingData.total_cost) : 0);
           
+          // Calculate discount amount if promotion exists (Lỗi 1: Apply promotion discount)
+          let discountAmount = 0;
+          if (bookingData.promotion && actualCost > 0) {
+            const discountPercent = bookingData.promotion.discount_percent || 0;
+            let discount = (actualCost * discountPercent) / 100;
+            const maxDiscount = bookingData.promotion.max_discount ? parseFloat(bookingData.promotion.max_discount) : null;
+            if (maxDiscount && discount > maxDiscount) {
+              discount = maxDiscount;
+            }
+            // Check min_amount requirement
+            const minAmount = bookingData.promotion.min_amount ? parseFloat(bookingData.promotion.min_amount) : null;
+            if (!minAmount || actualCost >= minAmount) {
+              discountAmount = discount;
+            }
+          } else if (bookingData.discount_amount) {
+            discountAmount = parseFloat(bookingData.discount_amount);
+          }
+          
+          const finalCost = actualCost - discountAmount;
+          
+          // Get dates from chargingSession if available (Lỗi 3: Ensure all fields populated)
+          const actualStart = bookingData.chargingSession?.started_at || bookingData.actual_start || bookingData.start_time;
+          const actualEnd = bookingData.chargingSession?.ended_at || bookingData.actual_end || bookingData.end_time;
+          
           const formattedBooking = {
             booking_id: bookingData.booking_id,
             station_name: bookingData.station?.station_name || 'N/A',
             vehicle_type: bookingData.vehicle_type,
-            actual_start: bookingData.actual_start || bookingData.start_time,
-            actual_end: bookingData.actual_end || bookingData.end_time,
-            start_battery_percent: bookingData.chargingSession?.start_battery_percent || 0,
-            end_battery_percent: bookingData.chargingSession?.end_battery_percent || bookingData.start_battery_percent || 0,
+            actual_start: actualStart,
+            actual_end: actualEnd,
+            start_battery_percent: bookingData.chargingSession?.start_battery_percent ?? null,
+            end_battery_percent: bookingData.chargingSession?.end_battery_percent ?? null,
             energy_consumed: bookingData.chargingSession?.energy_consumed || 0,
             price_per_kwh: bookingData.station?.price_per_kwh || 0,
             promotion_code: bookingData.promotion?.code || null,
             discount_percent: bookingData.promotion?.discount_percent || 0,
             max_discount: bookingData.promotion?.max_discount || 0,
-            original_cost: actualCost, // Use actual cost
-            discount_amount: bookingData.discount_amount || 0,
-            total_cost: actualCost // Use actual cost (tiền thực tế khi sạc)
+            original_cost: actualCost, // Use actual cost before discount
+            discount_amount: discountAmount,
+            total_cost: finalCost // Final cost after discount
           };
+          
+          console.log('[Payment] Formatted booking:', {
+            original_cost: formattedBooking.original_cost,
+            discount: formattedBooking.discount_amount,
+            total_cost: formattedBooking.total_cost,
+            promotion_code: formattedBooking.promotion_code
+          });
           
           setBooking(formattedBooking);
         } else {
@@ -127,19 +162,25 @@ const Payment = () => {
     return typeMap[type] || type;
   };
 
-  // Calculate charging duration
+  // Calculate charging duration (Lỗi 3: Handle null dates)
   const getChargingDuration = () => {
-    const start = new Date(booking.actual_start);
-    const end = new Date(booking.actual_end);
-    const diffMs = end.getTime() - start.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const hours = Math.floor(diffMins / 60);
-    const minutes = diffMins % 60;
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
+    if (!booking.actual_start || !booking.actual_end) return 'N/A';
+    try {
+      const start = new Date(booking.actual_start);
+      const end = new Date(booking.actual_end);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return 'N/A';
+      const diffMs = end.getTime() - start.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const hours = Math.floor(diffMins / 60);
+      const minutes = diffMins % 60;
+      
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      }
+      return `${minutes}m`;
+    } catch (e) {
+      return 'N/A';
     }
-    return `${minutes}m`;
   };
 
   const handlePayment = async () => {
@@ -243,10 +284,14 @@ const Payment = () => {
               <div className="detail-content">
                 <span className="detail-label">Thời gian sạc</span>
                 <span className="detail-value">
-                  {new Date(booking.actual_start).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                  {' - '}
-                  {new Date(booking.actual_end).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                  {' '}({getChargingDuration()})
+                  {booking.actual_start ? (
+                    <>
+                      {new Date(booking.actual_start).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      {' - '}
+                      {booking.actual_end ? new Date(booking.actual_end).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Đang sạc'}
+                      {' '}({getChargingDuration()})
+                    </>
+                  ) : 'N/A'}
                 </span>
               </div>
             </div>
@@ -258,7 +303,10 @@ const Payment = () => {
               <div className="detail-content">
                 <span className="detail-label">% pin</span>
                 <span className="detail-value">
-                  {booking.start_battery_percent}% → {booking.end_battery_percent}%
+                  {booking.start_battery_percent !== null && booking.start_battery_percent !== undefined && 
+                   booking.end_battery_percent !== null && booking.end_battery_percent !== undefined
+                    ? `${booking.start_battery_percent}% → ${booking.end_battery_percent}%`
+                    : 'N/A'}
                 </span>
               </div>
             </div>
@@ -269,7 +317,7 @@ const Payment = () => {
               </div>
               <div className="detail-content">
                 <span className="detail-label">Năng lượng tiêu thụ</span>
-                <span className="detail-value">{booking.energy_consumed} kWh</span>
+                <span className="detail-value">{booking.energy_consumed > 0 ? `${booking.energy_consumed} kWh` : 'N/A'}</span>
               </div>
             </div>
           </div>
@@ -282,10 +330,12 @@ const Payment = () => {
           <div className="cost-breakdown">
             <div className="cost-row">
               <span>Giá gốc</span>
-              <span className="cost-value">{booking.original_cost.toLocaleString()}đ</span>
+              <span className="cost-value">{booking.original_cost > 0 ? booking.original_cost.toLocaleString('vi-VN') + 'đ' : 'N/A'}</span>
             </div>
             <div className="cost-detail">
-              {booking.energy_consumed} kWh × {booking.price_per_kwh.toLocaleString()}đ/kWh
+              {booking.energy_consumed > 0 && booking.price_per_kwh > 0 
+                ? `${booking.energy_consumed} kWh × ${booking.price_per_kwh.toLocaleString('vi-VN')}đ/kWh`
+                : 'N/A'}
             </div>
 
             {booking.promotion_code && (
@@ -295,10 +345,10 @@ const Payment = () => {
                     <Tag size={18} />
                     <span>Mã giảm giá: {booking.promotion_code}</span>
                   </div>
-                  <span className="discount-value">-{booking.discount_amount.toLocaleString()}đ</span>
+                  <span className="discount-value">-{booking.discount_amount > 0 ? booking.discount_amount.toLocaleString('vi-VN') + 'đ' : '0đ'}</span>
                 </div>
                 <div className="cost-detail">
-                  Giảm {booking.discount_percent}% (tối đa {booking.max_discount.toLocaleString()}đ)
+                  Giảm {booking.discount_percent}% {booking.max_discount > 0 ? `(tối đa ${booking.max_discount.toLocaleString('vi-VN')}đ)` : ''}
                 </div>
               </>
             )}
@@ -307,7 +357,7 @@ const Payment = () => {
 
             <div className="cost-row total-row">
               <span>Tổng thanh toán</span>
-              <span className="total-value">{booking.total_cost.toLocaleString()}đ</span>
+              <span className="total-value">{booking.total_cost > 0 ? booking.total_cost.toLocaleString('vi-VN') + 'đ' : 'N/A'}</span>
             </div>
           </div>
         </div>
@@ -427,6 +477,27 @@ const Payment = () => {
         title={alertModal.title}
         message={alertModal.message}
         type={alertModal.type}
+      />
+
+      {/* Payment Success Modal - Lỗi 4: Redirect to notifications */}
+      <AlertModal
+        isOpen={showPaymentSuccessModal}
+        onClose={() => {
+          setShowPaymentSuccessModal(false);
+          navigate('/user/notifications');
+        }}
+        title="Thanh toán thành công!"
+        message={paymentResult?.message || 'Thanh toán của bạn đã được xử lý thành công.'}
+        type="success"
+      />
+
+      {/* Payment Failed Modal */}
+      <AlertModal
+        isOpen={showPaymentFailedModal}
+        onClose={() => setShowPaymentFailedModal(false)}
+        title="Thanh toán thất bại"
+        message={paymentResult?.message || 'Thanh toán của bạn không thành công. Vui lòng thử lại.'}
+        type="error"
       />
     </div>
   );

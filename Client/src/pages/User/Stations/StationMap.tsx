@@ -216,6 +216,18 @@ const StationMap = () => {
                         <span className="meta-label">Đánh giá:</span>
                         <span className="meta-value rating">⭐ {avgRating}</span>
                       </div>
+                      <div className="meta-item meta-item-favorite">
+                        <button 
+                          className="favorite-btn-inline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddFavorite(station.station_id);
+                          }}
+                          title="Yêu thích"
+                        >
+                          <Heart size={18} />
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="station-info">
@@ -253,16 +265,6 @@ const StationMap = () => {
                         }}
                       >
                         Đặt lịch
-                      </button>
-                      <button 
-                        className="action-btn action-btn-favorite"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddFavorite(station.station_id);
-                        }}
-                        title="Yêu thích"
-                      >
-                        <Heart size={18} />
                       </button>
                     </div>
                   </div>

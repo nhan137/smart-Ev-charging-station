@@ -31,7 +31,14 @@ const Notifications = () => {
       });
       
       if (response.success && response.data) {
-        setNotifications(response.data.notifications || []);
+        // Map backend fields to frontend format
+        const mappedNotifications = (response.data.notifications || []).map((notif: any) => ({
+          ...notif,
+          notification_id: notif.notification_id || notif.id,
+          receivedAt: notif.created_at || notif.receivedAt || notif.received_at,
+          isRead: notif.status === 'read' || notif.isRead === true
+        }));
+        setNotifications(mappedNotifications);
       }
     } catch (error: any) {
       console.error('Error loading notifications:', error);
@@ -46,10 +53,12 @@ const Notifications = () => {
       setNotifications(prev =>
         prev.map(notif =>
           notif.notification_id === notificationId
-            ? { ...notif, status: 'read' }
+            ? { ...notif, status: 'read', isRead: true }
             : notif
         )
       );
+      // Dispatch event to update badge in PublicLayout
+      window.dispatchEvent(new CustomEvent('notification-updated'));
     } catch (error: any) {
       console.error('Error marking as read:', error);
     }
@@ -59,8 +68,10 @@ const Notifications = () => {
     try {
       await notificationService.markAllAsRead();
       setNotifications(prev =>
-        prev.map(notif => ({ ...notif, status: 'read' }))
+        prev.map(notif => ({ ...notif, status: 'read', isRead: true }))
       );
+      // Dispatch event to update badge in PublicLayout
+      window.dispatchEvent(new CustomEvent('notification-updated'));
     } catch (error: any) {
       console.error('Error marking all as read:', error);
     }
@@ -74,11 +85,11 @@ const Notifications = () => {
 
   const filteredNotifications = notifications.filter(notif => {
     if (filter === 'all') return true;
-    if (filter === 'unread') return notif.status === 'unread';
+    if (filter === 'unread') return notif.status === 'unread' || !notif.isRead;
     return notif.type === filter;
   });
 
-  const unreadCount = notifications.filter(n => n.status === 'unread').length;
+  const unreadCount = notifications.filter(n => n.status === 'unread' || !n.isRead).length;
 
   // Highlight 6-ký tự mã check-in (A-Z0-9) trong message và format hàng ngang
   const renderMessage = (message: string) => {
@@ -212,13 +223,24 @@ const Notifications = () => {
                   </span>
                   <span className="notification-time">
                     <Clock size={14} />
-                    {new Date(notif.receivedAt).toLocaleString('vi-VN', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {(() => {
+                      // Try multiple date fields from backend
+                      const dateValue = notif.receivedAt || notif.received_at || notif.createdAt || notif.created_at || notif.timestamp || notif.date;
+                      if (!dateValue) return 'N/A';
+                      try {
+                        const date = new Date(dateValue);
+                        if (isNaN(date.getTime())) return 'N/A';
+                        return date.toLocaleString('vi-VN', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                      } catch (e) {
+                        return 'N/A';
+                      }
+                    })()}
                   </span>
                 </div>
 

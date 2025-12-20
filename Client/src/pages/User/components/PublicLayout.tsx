@@ -21,6 +21,7 @@ import LoginModal from '../../Auth/LoginModal';
 import QuickBookingModal from './QuickBookingModal';
 import NotificationPopup from '../../../components/shared/NotificationPopup';
 import Footer from '../../../components/shared/Footer';
+import { notificationService } from '../../../services/notificationService';
 import './PublicLayout.css';
 
 const PublicLayout = () => {
@@ -36,6 +37,7 @@ const PublicLayout = () => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showNotificationPopup, setShowNotificationPopup] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -59,6 +61,50 @@ const PublicLayout = () => {
 
       return () => clearTimeout(timer);
     }
+  }, [isAuthenticated]);
+
+  // Load unread notification count
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUnreadNotificationCount(0);
+      return;
+    }
+
+    const loadUnreadCount = async () => {
+      try {
+        const response = await notificationService.getNotificationHistory({
+          status: 'unread',
+          limit: 100
+        });
+        if (response.success && response.data) {
+          const unreadNotifications = response.data.notifications || [];
+          // Also check isRead field
+          const unreadCount = unreadNotifications.filter((n: any) => 
+            n.status === 'unread' || !n.isRead
+          ).length;
+          setUnreadNotificationCount(unreadCount);
+        }
+      } catch (error) {
+        console.error('Error loading unread count:', error);
+        setUnreadNotificationCount(0);
+      }
+    };
+
+    loadUnreadCount();
+    
+    // Refresh every 10 seconds for real-time updates
+    const interval = setInterval(loadUnreadCount, 10000);
+    
+    // Listen for notification updates (when marked as read)
+    const handleNotificationUpdate = () => {
+      loadUnreadCount();
+    };
+    window.addEventListener('notification-updated', handleNotificationUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notification-updated', handleNotificationUpdate);
+    };
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -199,9 +245,33 @@ const PublicLayout = () => {
                         navigate('/user/notifications');
                         setShowUserDropdown(false);
                       }}
+                      style={{ position: 'relative', paddingRight: unreadNotificationCount > 0 ? '2.5rem' : '1rem' }}
                     >
                       <Bell size={18} />
                       <span>Thông báo</span>
+                      {unreadNotificationCount > 0 && (
+                        <span style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: '#ef4444',
+                          color: 'white',
+                          borderRadius: '50%',
+                          minWidth: '20px',
+                          height: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          padding: '0 6px',
+                          boxSizing: 'border-box',
+                          lineHeight: '20px'
+                        }}>
+                          {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                        </span>
+                      )}
                     </button>
 
                     {/* ===== NEW ITEMS ===== */}

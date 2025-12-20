@@ -41,8 +41,10 @@ const ChargingStatus = () => {
           // Set minimal data, but wait for Socket.IO updates for actual values
           setChargingData({
             ...data,
-            // Reset to initial values - will be updated by Socket.IO
-            current_battery_percent: data.start_battery_percent || 50,
+            // Sync with IoT data: use start_battery_percent from backend (not hardcoded 50%)
+            // If IoT starts at 50%, UI must also start at 50%
+            current_battery_percent: data.start_battery_percent ?? 0,
+            start_battery_percent: data.start_battery_percent ?? 0,
             energy_consumed: 0,
             estimated_cost: 0
           });
@@ -298,18 +300,24 @@ const ChargingStatus = () => {
   };
 
   // Calculate progress percentages
-  // Get start battery from charging session (initial battery level)
+  // Get start battery from charging session (initial battery level from IoT)
+  // CRITICAL: If IoT starts at 50%, UI must also start at 50%
   const startBattery = chargingData?.start_battery_percent ?? 0;
-  const currentBattery = chargingData?.current_battery_percent ?? 0;
+  const currentBattery = chargingData?.current_battery_percent ?? startBattery;
   // Always use 100% as the target end battery (not end_battery_percent which might be set early)
   const targetBattery = 100;
   
   // Calculate battery progress: from start to 100% (0% to 100% of progress bar)
+  // Progress bar starts at 0% and fills to 100% as battery goes from startBattery to 100%
   // This ensures the bar fills proportionally to actual battery percentage
   const batteryRange = targetBattery - startBattery;
   const batteryPercent = batteryRange > 0 
     ? Math.min(100, Math.max(0, ((currentBattery - startBattery) / batteryRange) * 100))
     : (currentBattery >= targetBattery ? 100 : 0);
+  
+  // Display battery percentage: show actual battery % (not progress bar %)
+  // If IoT starts at 50%, display 50% (not 0%)
+  const displayBatteryPercent = Math.round(currentBattery * 10) / 10; // One decimal place
   
   const energyConsumed = parseFloat(chargingData?.energy_consumed || 0);
   const estimatedCost = parseFloat(chargingData?.estimated_cost || 0);
@@ -454,7 +462,7 @@ const ChargingStatus = () => {
             </div>
             <div className="progress-bar-container">
               <div className="progress-bar" style={{ width: `${Math.min(100, Math.max(0, batteryPercent))}%` }}>
-                <span className="progress-text">{Math.round(batteryPercent)}%</span>
+                <span className="progress-text">{displayBatteryPercent}%</span>
               </div>
             </div>
           </div>

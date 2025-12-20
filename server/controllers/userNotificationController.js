@@ -28,12 +28,14 @@ exports.getUnreadNotifications = async (req, res, next) => {
 
     // Format response
     const formattedNotifications = notifications.map(notif => ({
+      notification_id: notif.notification_id,
       id: notif.notification_id,
       title: notif.title,
       message: notif.message,
       type: notif.type,
       status: notif.status,
-      created_at: notif.created_at
+      created_at: notif.created_at,
+      isRead: notif.status === 'read'
     }));
 
     res.status(200).json({
@@ -102,12 +104,14 @@ exports.getNotificationHistory = async (req, res, next) => {
 
     // Format response
     const formattedNotifications = notifications.map(notif => ({
+      notification_id: notif.notification_id,
       id: notif.notification_id,
       title: notif.title,
       message: notif.message,
       type: notif.type,
       status: notif.status,
-      created_at: notif.created_at
+      created_at: notif.created_at,
+      isRead: notif.status === 'read'
     }));
 
     res.status(200).json({
