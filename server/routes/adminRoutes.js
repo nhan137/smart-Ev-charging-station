@@ -1,84 +1,115 @@
 const express = require('express');
 const router = express.Router();
-
-// Controllers
-const dashboard = require('../controllers/adminDashboardController');
-const notify = require('../controllers/adminNotificationController');
-const users = require('../controllers/adminUserController');
-const stations = require('../controllers/adminStationController');
-const bookings = require('../controllers/adminBookingController');
-const payments = require('../controllers/adminPaymentController');
-
-// Middlewares
+const adminDashboardController = require('../controllers/adminDashboardController');
+const adminNotificationController = require('../controllers/adminNotificationController');
+const adminUserController = require('../controllers/adminUserController');
+const adminStationController = require('../controllers/adminStationController');
+const adminBookingController = require('../controllers/adminBookingController');
+const adminPaymentController = require('../controllers/adminPaymentController');
 const { authenticate, authorize } = require('../middleware/auth');
-const v = require('../middleware/validation');
+const { validateUser, validateAdminUserUpdate, validateUserStatus, validateStation, validateStationUpdate } = require('../middleware/validation');
 
 /**
- * 💡 MẸO: Vì TẤT CẢ các route dưới đây đều yêu cầu Admin, 
- * ta dùng router.use để áp dụng middleware cho toàn bộ file này 1 lần duy nhất.
+ * Admin Routes
+ * Base path: /api/admin
+ * All routes require Admin authentication (role_id = 3)
  */
-router.use(authenticate, authorize('admin'));
 
-// --- 📊 DASHBOARD ---
-router.get('/dashboard/overview', dashboard.getOverview);
-router.get('/dashboard/highlights', dashboard.getHighlights);
-router.get('/dashboard/recent-activities', dashboard.getRecentActivities);
+// Dashboard Routes
+// GET /api/admin/dashboard/overview - Get overview statistics
+router.get('/dashboard/overview', authenticate, authorize('admin'), adminDashboardController.getOverview);
 
-// Nhóm các route biểu đồ
-router.prefix('/dashboard/charts', (sub) => {
-  sub.get('/revenue', dashboard.getRevenueChart);
-  sub.get('/booking-trend', dashboard.getBookingTrendChart);
-  sub.get('/station-types', dashboard.getStationTypesChart);
-});
+// GET /api/admin/dashboard/highlights - Get highlight statistics
+router.get('/dashboard/highlights', authenticate, authorize('admin'), adminDashboardController.getHighlights);
 
-// --- 🔔 NOTIFICATIONS ---
-router.post('/notifications', notify.sendNotification);
-router.get('/notifications/history', notify.getHistory);
+// GET /api/admin/dashboard/charts/revenue - Get revenue chart data
+router.get('/dashboard/charts/revenue', authenticate, authorize('admin'), adminDashboardController.getRevenueChart);
 
-// --- 👥 USER MANAGEMENT ---
-router.get('/users/stats', users.getUserStats);
+// GET /api/admin/dashboard/charts/booking-trend - Get booking trend chart data
+router.get('/dashboard/charts/booking-trend', authenticate, authorize('admin'), adminDashboardController.getBookingTrendChart);
 
-router.route('/users')
-  .get(users.getUsers)
-  .post(v.validateUser, users.createUser);
+// GET /api/admin/dashboard/charts/station-types - Get station types chart data
+router.get('/dashboard/charts/station-types', authenticate, authorize('admin'), adminDashboardController.getStationTypesChart);
 
-router.route('/users/:user_id')
-  .get(users.getUserById)
-  .put(v.validateAdminUserUpdate, users.updateUser)
-  .delete(users.deleteUser);
+// GET /api/admin/dashboard/recent-activities - Get recent activities
+router.get('/dashboard/recent-activities', authenticate, authorize('admin'), adminDashboardController.getRecentActivities);
 
-router.put('/users/:user_id/status', v.validateUserStatus, users.updateUserStatus);
+// Notification Routes
+// POST /api/admin/notifications - Send notification
+router.post('/notifications', authenticate, authorize('admin'), adminNotificationController.sendNotification);
 
-// --- 🔌 STATION MANAGEMENT ---
-router.get('/stations/stats', stations.getStationStats);
+// GET /api/admin/notifications/history - Get notification history
+router.get('/notifications/history', authenticate, authorize('admin'), adminNotificationController.getHistory);
 
-router.route('/stations')
-  .get(stations.getStations)
-  .post(v.validateStation, stations.createStation);
+// User Management Routes
+// GET /api/admin/users/stats - Get user statistics
+router.get('/users/stats', authenticate, authorize('admin'), adminUserController.getUserStats);
 
-router.route('/stations/:station_id')
-  .get(stations.getStationById)
-  .put(v.validateStationUpdate, stations.updateStation)
-  .delete(stations.deleteStation);
+// GET /api/admin/users - Get all users with filters
+router.get('/users', authenticate, authorize('admin'), adminUserController.getUsers);
 
-// --- 📅 BOOKING MANAGEMENT ---
-router.get('/bookings/stats', bookings.getBookingStats);
-router.get('/bookings', bookings.getBookings);
+// POST /api/admin/users - Create new user
+router.post('/users', authenticate, authorize('admin'), validateUser, adminUserController.createUser);
 
-router.route('/bookings/:booking_id')
-  .get(bookings.getBookingById);
+// GET /api/admin/users/:user_id - Get user by ID
+router.get('/users/:user_id', authenticate, authorize('admin'), adminUserController.getUserById);
 
-router.put('/bookings/:booking_id/confirm', bookings.confirmBooking);
-router.put('/bookings/:booking_id/cancel', bookings.cancelBooking);
+// PUT /api/admin/users/:user_id - Update user
+router.put('/users/:user_id', authenticate, authorize('admin'), validateAdminUserUpdate, adminUserController.updateUser);
 
-// --- 💰 PAYMENT MANAGEMENT ---
-router.get('/payments/stats', payments.getPaymentStats);
-router.get('/payments/export', payments.exportPayments); // Đặt trước route có tham số :id
+// PUT /api/admin/users/:user_id/status - Update user status (lock/unlock)
+router.put('/users/:user_id/status', authenticate, authorize('admin'), validateUserStatus, adminUserController.updateUserStatus);
 
-router.route('/payments')
-  .get(payments.getPayments);
+// DELETE /api/admin/users/:user_id - Delete user
+router.delete('/users/:user_id', authenticate, authorize('admin'), adminUserController.deleteUser);
 
-router.route('/payments/:payment_id')
-  .get(payments.getPaymentById);
+// Station Management Routes
+// GET /api/admin/stations/stats - Get station statistics
+router.get('/stations/stats', authenticate, authorize('admin'), adminStationController.getStationStats);
+
+// GET /api/admin/stations - Get all stations with filters
+router.get('/stations', authenticate, authorize('admin'), adminStationController.getStations);
+
+// POST /api/admin/stations - Create new station
+router.post('/stations', authenticate, authorize('admin'), validateStation, adminStationController.createStation);
+
+// GET /api/admin/stations/:station_id - Get station by ID
+router.get('/stations/:station_id', authenticate, authorize('admin'), adminStationController.getStationById);
+
+// PUT /api/admin/stations/:station_id - Update station
+router.put('/stations/:station_id', authenticate, authorize('admin'), validateStationUpdate, adminStationController.updateStation);
+
+// DELETE /api/admin/stations/:station_id - Delete station
+router.delete('/stations/:station_id', authenticate, authorize('admin'), adminStationController.deleteStation);
+
+// Booking Management Routes
+// GET /api/admin/bookings/stats - Get booking statistics
+router.get('/bookings/stats', authenticate, authorize('admin'), adminBookingController.getBookingStats);
+
+// GET /api/admin/bookings - Get all bookings with filters
+router.get('/bookings', authenticate, authorize('admin'), adminBookingController.getBookings);
+
+// GET /api/admin/bookings/:booking_id - Get booking by ID
+router.get('/bookings/:booking_id', authenticate, authorize('admin'), adminBookingController.getBookingById);
+
+// PUT /api/admin/bookings/:booking_id/confirm - Confirm booking
+router.put('/bookings/:booking_id/confirm', authenticate, authorize('admin'), adminBookingController.confirmBooking);
+
+// PUT /api/admin/bookings/:booking_id/cancel - Cancel booking
+router.put('/bookings/:booking_id/cancel', authenticate, authorize('admin'), adminBookingController.cancelBooking);
+
+// Payment Management Routes
+// GET /api/admin/payments/stats - Get payment statistics
+router.get('/payments/stats', authenticate, authorize('admin'), adminPaymentController.getPaymentStats);
+
+// GET /api/admin/payments - Get all payments with filters
+router.get('/payments', authenticate, authorize('admin'), adminPaymentController.getPayments);
+
+// GET /api/admin/payments/export - Export payments to CSV/Excel (MUST be before /:payment_id)
+router.get('/payments/export', authenticate, authorize('admin'), adminPaymentController.exportPayments);
+
+// GET /api/admin/payments/:payment_id - Get payment by ID
+router.get('/payments/:payment_id', authenticate, authorize('admin'), adminPaymentController.getPaymentById);
 
 module.exports = router;
+
