@@ -1,0 +1,92 @@
+.booking-management {
+  max-width: 1600px;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn-text {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.action-btn-text:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+/* Vehicle Badge */
+.vehicle-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+/* Station Cell */
+.station-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.station-cell svg {
+  color: #8b5cf6;
+  flex-shrink: 0;
+}
+
+/* Date Input Groups */
+.date-input-group {
+  min-width: 180px;
+  flex: 0 0 180px;
+}
+
+.date-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.date-input-group input[type="date"] {
+  flex: 1;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .filter-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-box {
+    max-width: 100%;
+  }
+
+  .filter-group {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .date-input-group {
+    flex: 1;
+    min-width: auto;
+  }
+}
