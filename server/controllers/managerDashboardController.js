@@ -1,120 +1,207 @@
 const { Op, fn, col, literal } = require('sequelize');
-const { User, Station, Booking, sequelize } = require('../models');
+const { sequelize } = require('../config/database');
+const User = require('../models/User');
+const Station = require('../models/Station');
+const Booking = require('../models/Booking');
 
-// --- UTILS ---
-const getTodayRange = () => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
+/**
+ * GET /api/manager/dashboard
+ * Manager Dashboard Overview
+ */
+exports.getDashboardOverview = async (req, res, next) => {
+  try {
+    const managerId = req.user.user_id;
 
-const DashboardController = {
-  getOverview: async (req, res, next) => {
-    try {
-      const managerId = req.user.user_id;
-      const { start, end } = getTodayRange();
+    // 1. Manager info
+    const manager = await User.findByPk(managerId, {
+      attributes: ['full_name']
+    });
 
-      // 1. Fetch Manager & Base Station Data cùng lúc
-      const [manager, allStations] = await Promise.all([
-        User.findByPk(managerId, { attributes: ['full_name'] }),
-        Station.findAll({
-          where: { manager_id: managerId },
-          attributes: ['station_id', 'station_name', 'status', 'total_slots', 'available_slots', 'created_at'],
-          raw: true
-        })
-      ]);
+    if (!manager) {
+      return res.status(404).json({
+        success: false,
+        message: 'Manager not found'
+      });
+    }
 
-      if (!manager) return res.status(404).json({ success: false, message: 'Manager Not Found' });
+    // 2. Stations stats
+    const [stationStats] = await Promise.all([
+      Station.findAll({
+        where: { manager_id: managerId },
+        attributes: [
+          [fn('COUNT', col('station_id')), 'total_stations'],
+          [
+            fn('SUM', literal("CASE WHEN status = 'active' THEN 1 ELSE 0 END")),
+            'active_stations'
+          ]
+        ],
+        raw: true
+      })
+    ]);
 
-      // Short-circuit nếu không có trạm nào
-      if (!allStations.length) {
-        return res.json({
-          success: true,
-          data: { manager_name: manager.full_name, stats: {}, recent_bookings: [], capacity: { percent: 0 } }
-        });
-      }
+    const totalStations = parseInt(stationStats?.total_stations || 0, 10) || 0;
+    const activeStations = parseInt(stationStats?.active_stations || 0, 10) || 0;
 
-      const stationIds = allStations.map(s => s.station_id);
-
-      // 2. Fetch Bookings Stats & Recent Bookings song song
-      const [bookingAgg, recentBookings] = await Promise.all([
-        // Tổng hợp stats trong ngày
-        Booking.findOne({
-          where: {
-            station_id: { [Op.in]: stationIds },
-            created_at: { [Op.between]: [start, end] }
-          },
-          attributes: [
-            [fn('COUNT', col('booking_id')), 'count'],
-            [fn('SUM', literal("CASE WHEN status = 'completed' THEN total_cost ELSE 0 END")), 'revenue']
-          ],
-          raw: true
-        }),
-        // 5 Booking mới nhất
-        Booking.findAll({
-          where: { station_id: { [Op.in]: stationIds } },
-          include: [
-            { model: User, as: 'user', attributes: ['full_name'] },
-            { model: Station, as: 'station', attributes: ['station_name'] }
-          ],
-          attributes: ['booking_id', 'start_time', 'status', 'total_cost'],
-          order: [['created_at', 'DESC']],
-          limit: 5
-        })
-      ]);
-
-      // 3. Tính toán Logic (Utilization & Aggregates)
-      const stats = {
-        total_stations: allStations.length,
-        active_stations: allStations.filter(s => s.status === 'active').length,
-        today_bookings: +(bookingAgg?.count || 0),
-        today_revenue: +(bookingAgg?.revenue || 0)
-      };
-
-      const capacity = allStations.reduce((acc, s) => {
-        acc.total += (s.total_slots || 0);
-        acc.available += (s.available_slots || 0);
-        return acc;
-      }, { total: 0, available: 0 });
-
-      const usedSlots = Math.max(capacity.total - capacity.available, 0);
-
-      // 4. Response Mapping
-      res.json({
+    // If manager has no stations, short-circuit other stats
+    if (totalStations === 0) {
+      return res.json({
         success: true,
         data: {
           manager_name: manager.full_name,
-          summary: stats,
-          capacity: {
-            ...capacity,
-            used: usedSlots,
-            utilization_rate: capacity.total > 0 ? +((usedSlots / capacity.total) * 100).toFixed(2) : 0
+          stats: {
+            total_stations: 0,
+            active_stations: 0,
+            today_bookings: 0,
+            today_revenue: 0
           },
-          // Format danh sách trạm phụ trách
-          stations: allStations.slice(0, 5).map(s => ({
-            id: s.station_id,
-            name: s.station_name,
-            slots: `${s.total_slots - s.available_slots}/${s.total_slots}`,
-            load: s.total_slots > 0 ? +(((s.total_slots - s.available_slots) / s.total_slots) * 100).toFixed(0) : 0
-          })),
-          // Format booking gần đây
-          recent_bookings: recentBookings.map(b => ({
-            id: b.booking_id,
-            customer: b.user?.full_name,
-            station: b.station?.station_name,
-            time: b.start_time,
-            status: b.status,
-            amount: +(b.total_cost || 0)
-          }))
+          recent_bookings: [],
+          capacity: {
+            total_slots: 0,
+            used_slots: 0,
+            percent: 0
+          }
         }
       });
-
-    } catch (e) {
-      next(e);
     }
+
+    // Get all station_ids for this manager (used in bookings queries)
+    const managerStations = await Station.findAll({
+      where: { manager_id: managerId },
+      attributes: ['station_id', 'total_slots', 'available_slots'],
+      raw: true
+    });
+
+    const stationIds = managerStations.map((s) => s.station_id);
+
+    // 3. Today's bookings & revenue
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const bookingAgg = await Booking.findAll({
+      where: {
+        station_id: { [Op.in]: stationIds },
+        created_at: {
+          [Op.between]: [todayStart, todayEnd]
+        }
+      },
+      attributes: [
+        [fn('COUNT', col('booking_id')), 'today_bookings'],
+        [
+          fn(
+            'SUM',
+            literal("CASE WHEN status = 'completed' THEN total_cost ELSE 0 END")
+          ),
+          'today_revenue'
+        ]
+      ],
+      raw: true
+    });
+
+    const bookingStats = bookingAgg[0] || {};
+    const todayBookings = parseInt(bookingStats.today_bookings || 0, 10) || 0;
+    const todayRevenue = parseFloat(bookingStats.today_revenue || 0) || 0;
+
+    // 4. Recent bookings (latest 5)
+    const recentBookings = await Booking.findAll({
+      where: {
+        station_id: { [Op.in]: stationIds }
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['full_name'],
+          required: true
+        },
+        {
+          model: Station,
+          as: 'station',
+          attributes: ['station_name'],
+          required: true
+        }
+      ],
+      attributes: [
+        'booking_id',
+        'start_time',
+        'status',
+        'total_cost',
+        'created_at'
+      ],
+      order: [['created_at', 'DESC']],
+      limit: 5
+    });
+
+    const recent = recentBookings.map((b) => {
+      const data = b.toJSON();
+      return {
+        id: data.booking_id,
+        customer_name: data.user?.full_name || null,
+        station_name: data.station?.station_name || null,
+        start_time: data.start_time,
+        status: data.status,
+        total_cost: data.total_cost !== null ? Number(data.total_cost) : 0
+      };
+    });
+
+    // 5. Capacity / Utilization
+    const totalSlots = managerStations.reduce(
+      (sum, s) => sum + (s.total_slots || 0),
+      0
+    );
+    const availableSlots = managerStations.reduce(
+      (sum, s) => sum + (s.available_slots || 0),
+      0
+    );
+    const usedSlots = Math.max(totalSlots - availableSlots, 0);
+    const percent =
+      totalSlots > 0 ? parseFloat(((usedSlots / totalSlots) * 100).toFixed(2)) : 0;
+
+    // 6. Get stations list for "Trạm phụ trách" section
+    const stationsList = await Station.findAll({
+      where: { manager_id: managerId },
+      attributes: [
+        'station_id',
+        'station_name',
+        'total_slots',
+        'available_slots'
+      ],
+      order: [['created_at', 'DESC']],
+      limit: 5
+    });
+
+    const formattedStations = stationsList.map(s => ({
+      station_id: s.station_id,
+      station_name: s.station_name,
+      total_slots: s.total_slots,
+      available_slots: s.available_slots,
+      used_slots: s.total_slots - s.available_slots
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        manager_name: manager.full_name,
+        stats: {
+          total_stations: totalStations,
+          active_stations: activeStations,
+          today_bookings: todayBookings,
+          today_revenue: Number(todayRevenue)
+        },
+        stations: formattedStations, // Danh sách trạm phụ trách
+        recent_bookings: recent,
+        capacity: {
+          total_slots: totalSlots,
+          used_slots: usedSlots,
+          percent
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
-module.exports = DashboardController;
+
