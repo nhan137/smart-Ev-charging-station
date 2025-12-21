@@ -112,10 +112,7 @@ const FeedbacksAndFavorites = () => {
         comment: comment || undefined
       };
       
-      console.log('[FeedbacksAndFavorites] Submitting feedback:', payload);
-      
-      const response = await feedbackService.create(payload);
-      console.log('[FeedbacksAndFavorites] Feedback response:', response);
+      await feedbackService.create(payload);
       
       setAlertModal({
         show: true,

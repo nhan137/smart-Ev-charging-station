@@ -12,7 +12,6 @@ export const feedbackService = {
       });
       return response.data;
     } catch (error: any) {
-      console.error('[feedbackService] Error:', error.response?.data);
       const errorMessage = error.response?.data?.message || error.response?.data?.errors?.[0]?.msg || 'Không thể gửi đánh giá';
       throw new Error(errorMessage);
     }
