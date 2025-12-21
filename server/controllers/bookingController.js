@@ -377,6 +377,7 @@ exports.getMyBookings = async (req, res, next) => {
 
       return {
         booking_id: booking.booking_id,
+        station_id: booking.station_id,
         station_name: station?.station_name || null,
         station_address: station?.address || null,
         vehicle_type: booking.vehicle_type,

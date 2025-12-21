@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star, MapPin, DollarSign, X, Send, Image as ImageIcon } from 'lucide-react';
 import { stationService } from '../../services/stationService';
@@ -15,6 +15,7 @@ const FeedbacksAndFavorites = () => {
   const [completedBookings, setCompletedBookings] = useState<any[]>([]);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [selectedStation, setSelectedStation] = useState<string>('');
+  const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null);
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -29,9 +30,15 @@ const FeedbacksAndFavorites = () => {
     message: '',
     type: 'success'
   });
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
-    loadData();
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+    loadData().finally(() => {
+      isLoadingRef.current = false;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const loadData = async () => {
@@ -39,17 +46,34 @@ const FeedbacksAndFavorites = () => {
       // Load completed bookings for feedback
       try {
         const response = await bookingService.getMyBookings({ status: 'completed' });
+        
         if (response.success && response.data) {
-          // Map to format needed for dropdown
-          const mappedBookings = response.data.map((b: any) => ({
-            booking_id: b.booking_id,
-            station_id: b.station_id || b.station?.station_id,
-            station_name: b.station_name || b.station?.station_name || 'Không rõ'
-          }));
-          setCompletedBookings(mappedBookings);
+          // Map to format needed for dropdown, filter out bookings without station_id
+          // Group by station_id to get unique stations (lấy booking mới nhất của mỗi trạm)
+          const stationMap = new Map<number, any>();
+          
+          response.data
+            .filter((b: any) => b.station_id != null && b.station_id !== undefined)
+            .forEach((b: any) => {
+              const stationId = b.station_id;
+              // Chỉ lưu nếu chưa có hoặc nếu booking_id lớn hơn (mới hơn)
+              if (!stationMap.has(stationId) || b.booking_id > stationMap.get(stationId).booking_id) {
+                stationMap.set(stationId, {
+                  booking_id: b.booking_id,
+                  station_id: b.station_id,
+                  station_name: b.station_name || 'Không rõ'
+                });
+              }
+            });
+          
+          // Convert Map to Array
+          const uniqueStations = Array.from(stationMap.values());
+          setCompletedBookings(uniqueStations);
+        } else {
+          setCompletedBookings([]);
         }
       } catch (error) {
-        console.error('Error loading completed bookings:', error);
+        console.error('[FeedbacksAndFavorites] Error loading completed bookings:', error);
         setCompletedBookings([]);
       }
     } else {
@@ -81,11 +105,17 @@ const FeedbacksAndFavorites = () => {
 
     setLoading(true);
     try {
-      await feedbackService.create({
+      const payload = {
         station_id: Number(selectedStation),
+        booking_id: selectedBookingId || undefined,
         rating,
         comment: comment || undefined
-      });
+      };
+      
+      console.log('[FeedbacksAndFavorites] Submitting feedback:', payload);
+      
+      const response = await feedbackService.create(payload);
+      console.log('[FeedbacksAndFavorites] Feedback response:', response);
       
       setAlertModal({
         show: true,
@@ -96,9 +126,11 @@ const FeedbacksAndFavorites = () => {
       
       // Reset form
       setSelectedStation('');
+      setSelectedBookingId(null);
       setRating(0);
       setComment('');
     } catch (error: any) {
+      console.error('[FeedbacksAndFavorites] Error submitting feedback:', error);
       setAlertModal({
         show: true,
         title: 'Lỗi',
@@ -196,15 +228,29 @@ const FeedbacksAndFavorites = () => {
                   <label>Chọn trạm sạc</label>
                   <select
                     value={selectedStation}
-                    onChange={(e) => setSelectedStation(e.target.value)}
+                    onChange={(e) => {
+                      const selectedValue = e.target.value;
+                      setSelectedStation(selectedValue);
+                      
+                      if (selectedValue && selectedValue !== '') {
+                        const selectedBooking = completedBookings.find(
+                          b => b.station_id && b.station_id.toString() === selectedValue
+                        );
+                        setSelectedBookingId(selectedBooking?.booking_id || null);
+                      } else {
+                        setSelectedBookingId(null);
+                      }
+                    }}
                     required
                   >
                     <option value="">-- Chọn trạm đã sạc --</option>
-                    {completedBookings.map((booking) => (
-                      <option key={booking.booking_id} value={booking.station_id}>
-                        {booking.station_name}
-                      </option>
-                    ))}
+                    {completedBookings
+                      .filter((booking) => booking.station_id != null)
+                      .map((booking) => (
+                        <option key={booking.booking_id} value={booking.station_id}>
+                          {booking.station_name}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -253,6 +299,7 @@ const FeedbacksAndFavorites = () => {
                     className="btn-cancel"
                     onClick={() => {
                       setSelectedStation('');
+                      setSelectedBookingId(null);
                       setRating(0);
                       setComment('');
                     }}
