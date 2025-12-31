@@ -21,7 +21,7 @@ console.log(`  - process.argv[2]: ${process.argv[2] || 'undefined'}`);
 console.log(`  - BOOKING_ID_RAW: ${BOOKING_ID_RAW || 'null'}`);
 
 const BOOKING_ID = BOOKING_ID_RAW ? parseInt(BOOKING_ID_RAW) : null;
-const START_BATTERY_PERCENT = START_BATTERY_PERCENT_RAW ? parseFloat(START_BATTERY_PERCENT_RAW) : 0; // Default to 0% if not provided
+const START_BATTERY_PERCENT = START_BATTERY_PERCENT_RAW ? parseFloat(START_BATTERY_PERCENT_RAW) : 50; // Default to 0% if not provided
 
 // Ví dụ: const START_BATTERY_PERCENT = START_BATTERY_PERCENT_RAW ? parseFloat(START_BATTERY_PERCENT_RAW) : 30;
 const UPDATE_INTERVAL = 3000; // 3 seconds
@@ -53,7 +53,7 @@ if (!BOOKING_ID || isNaN(BOOKING_ID) || BOOKING_ID <= 0) {
 
 
 let currentBatteryPercent = START_BATTERY_PERCENT; // Will be set in runSimulation(), but initialize here
-let energyConsumed = 0.0; // Start at 0 kWh
+let energyConsumed = 10.0; // Start at 0 kWh
 
 /**
  * Send charging update to the server
